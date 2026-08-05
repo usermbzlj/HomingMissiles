@@ -2,9 +2,12 @@
 
 面向 **Paper / Purpur / Leaf 1.21.x** 的多人、多箭、连续物理制导弓插件。插件逐 tick 修改箭的真实速度向量，不传送箭实体，因此保留惯性、转弯半径、原版碰撞与伤害流程。
 
-> 当前发布线：`2.0.0`  
+锁定后提供皇牌空战风格的简易 HUD：射手持续 `TRACK` ActionBar，被锁目标持续 `MISSILE` 警告与越近越急的警报音。索敌与制导物理不变，可用 `hud.*` 开关。
+
+> 当前发布线：`2.0.0`（含 HUD，`config-version: 3`）  
 > 编译 API：Paper API `1.21.4-R0.1-SNAPSHOT`  
 > Java：21  
+> 源码仓库：https://github.com/usermbzlj/HomingMissiles  
 > 已确认能够在 Leaf `1.21.11` 上完成加载与启用。该记录不等于对所有 Paper 分支和未来版本的无条件兼容保证。
 
 ## 目录
@@ -82,14 +85,14 @@ mvn -version
 从 Git 仓库获取时：
 
 ```bash
-git clone <repository-url>
-cd HomingMissilesPlugin
+git clone https://github.com/usermbzlj/HomingMissiles.git
+cd HomingMissiles
 ```
 
 使用源码压缩包时，解压后进入包含 `pom.xml` 的目录：
 
 ```bash
-cd HomingMissilesPlugin
+cd HomingMissiles
 ```
 
 ### 3. 正式构建
@@ -201,7 +204,8 @@ powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 - 开启 `-Xlint:all -Werror`；
 - 运行向量边界测试；
 - 运行命令纠错与 Tab 前缀测试；
-- 运行配置格式工具测试。
+- 运行配置格式工具测试；
+- 运行 HUD 方位格式测试。
 
 离线 API 桩只用于编译和纯逻辑测试，**不能证明真实 Paper 运行兼容性，也不会被打入发布 JAR**。
 
@@ -218,9 +222,10 @@ powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 7. 目标死亡、离线、跨世界、进入被排除模式后能够解除或重选。
 8. 箭正常撞墙、命中、自毁，不发生瞬移。
 9. 达到个人/全服上限和冷却时反馈准确。
-10. `/hbow reload` 面对非法配置时保留可用设置并给出警告。
-11. 区块卸载、重新加载和服务器重启行为符合 `lifecycle` 配置。
-12. `/hbow status verbose` 的平均调度耗时没有持续异常增长。
+10. 锁定后射手出现持续 `TRACK` ActionBar；被锁玩家出现 `MISSILE` 红条与持续蜂鸣，靠近后变急；箭结束后面板与警报消失。
+11. `/hbow reload` 面对非法配置时保留可用设置并给出警告。
+12. 区块卸载、重新加载和服务器重启行为符合 `lifecycle` 配置。
+13. `/hbow status verbose` 的平均调度耗时没有持续异常增长。
 
 ---
 
@@ -299,9 +304,11 @@ HomingMissilesPlugin/
 │  ├─ model/
 │  │  └─ TrackedArrow.java
 │  ├─ service/
-│  │  └─ HomingService.java
+│  │  ├─ HomingService.java
+│  │  └─ LockHudService.java
 │  └─ util/
 │     ├─ CommandUtil.java
+│     ├─ HudFormat.java
 │     ├─ MessageService.java
 │     └─ VectorMath.java
 ├─ src/main/resources/
@@ -333,9 +340,11 @@ HomingMissilesPlugin/
 | `HomingBowFactory` | 创建和识别带 PDC 身份的制导弓 |
 | `HomingListener` | 连接 Bukkit 事件与领域服务 |
 | `HomingService` | 箭状态、目标选择、每 tick 制导、持久化恢复、限制和诊断 |
+| `LockHudService` | 聚合锁定关系，刷新射手/目标 ActionBar，播放被锁持续警报 |
 | `TrackedArrow` | 单支在途箭的最小可变状态 |
 | `HomingBowCommand` | 命令路由、权限、帮助、参数校验和 Tab 补全 |
 | `MessageService` | 消息模板、占位符、聊天与 Action Bar 输出 |
+| `HudFormat` | 相对水平方位粗分（←↑→↓） |
 | `VectorMath` | 有限角速度转向与数值边界保护 |
 | `CommandUtil` | 前缀过滤、编辑距离和命令建议 |
 
@@ -351,7 +360,7 @@ HomingMissilesPlugin/
 onEnable
   → saveDefaultConfig
   → SettingsManager.reload
-  → 创建 MessageService / HomingBowFactory / HomingService
+  → 创建 MessageService / HomingBowFactory / LockHudService / HomingService
   → 注册 HomingListener
   → 注册 HomingBowCommand 与 TabCompleter
   → HomingService.start
@@ -373,6 +382,7 @@ EntityShootBowEvent
 
 ```text
 Bukkit 主线程调度
+  → LockHudService.beginTick
   → 遍历 tracked 箭
   → 单箭 try/catch 隔离
   → 校验实体、世界和寿命
@@ -380,7 +390,8 @@ Bukkit 主线程调度
   → 计算目标预判位置
   → VectorMath.rotateTowards
   → 限制速度并写回 velocity
-  → 粒子、声音与锁定反馈
+  → 首锁提示（一次性）+ reportLock
+  → LockHudService.endTick（持续 HUD / 被锁蜂鸣）
 ```
 
 ### 命中与生命周期
@@ -511,9 +522,12 @@ VectorMath.rotateTowards
 ## 配置、命令与权限
 
 - 完整命令：[`docs/COMMANDS.md`](docs/COMMANDS.md)
-- 完整配置：[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)
+- 完整配置：[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)（含 `hud.*` 与 `config-version: 3`）
 - 安装和排错：[`docs/INSTALL.md`](docs/INSTALL.md)
 - 开发工作流：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
+- 变更记录：[`CHANGELOG.md`](CHANGELOG.md)
+
+升级到含 HUD 的构建后，旧配置若仍为 `config-version: 2`，缺失的 `hud` 字段会使用安全默认值并在重载时给出版本警告；也可对照仓库内最新 `config.yml` 补齐。
 
 常用命令：
 
