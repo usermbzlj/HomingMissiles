@@ -1,0 +1,353 @@
+package cn.yjj.homingmissiles.config;
+
+import cn.yjj.homingmissiles.HomingMissilesPlugin;
+import org.bukkit.configuration.file.FileConfiguration;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+public final class SettingsManager {
+    public static final int CONFIG_VERSION = 2;
+
+    private static final Map<String, Tunable> TUNABLES;
+    private static final Map<String, Preset> PRESETS;
+
+    static {
+        Map<String, Tunable> tunables = new LinkedHashMap<>();
+        register(tunables, new Tunable("range", "tracking.range", 48.0, 4.0, 256.0, "索敌范围（格）"));
+        register(tunables, new Tunable("lifetime", "tracking.max-lifetime-ticks", 120.0, 20.0, 1200.0, "寿命（tick）"));
+        register(tunables, new Tunable("delay", "tracking.activation-delay-ticks", 4.0, 0.0, 100.0, "启动延迟（tick）"));
+        register(tunables, new Tunable("turn", "tracking.turn-rate-degrees-per-tick", 8.0, 0.1, 180.0, "每tick最大转角（度）"));
+        register(tunables, new Tunable("acceleration", "tracking.acceleration-per-tick", 0.015, -0.2, 0.5, "每tick加速度"));
+        register(tunables, new Tunable("min-speed", "tracking.min-speed", 1.0, 0.05, 10.0, "最低速度"));
+        register(tunables, new Tunable("max-speed", "tracking.max-speed", 2.8, 0.05, 20.0, "最高速度"));
+        register(tunables, new Tunable("lead", "tracking.lead-ticks", 4.0, 0.0, 40.0, "目标预判tick"));
+        register(tunables, new Tunable("switch-advantage", "tracking.switch-advantage-blocks", 3.0, 0.0, 64.0, "切换目标所需距离优势"));
+        TUNABLES = Collections.unmodifiableMap(tunables);
+
+        Map<String, Preset> presets = new LinkedHashMap<>();
+        presets.put("balanced", new Preset("balanced", "均衡", Map.of(
+                "turn", 8.0, "acceleration", 0.015, "min-speed", 1.0, "max-speed", 2.8, "lead", 4.0)));
+        presets.put("agile", new Preset("agile", "高机动", Map.of(
+                "turn", 14.0, "acceleration", 0.025, "min-speed", 1.1, "max-speed", 3.2, "lead", 5.0)));
+        presets.put("realistic", new Preset("realistic", "大转弯半径", Map.of(
+                "turn", 4.5, "acceleration", 0.008, "min-speed", 0.9, "max-speed", 2.4, "lead", 6.0)));
+        PRESETS = Collections.unmodifiableMap(presets);
+    }
+
+    private final HomingMissilesPlugin plugin;
+    private volatile PluginSettings current;
+
+    public SettingsManager(HomingMissilesPlugin plugin) {
+        this.plugin = plugin;
+    }
+
+    public PluginSettings current() {
+        return current;
+    }
+
+    public LoadReport reload() {
+        plugin.reloadConfig();
+        FileConfiguration c = plugin.getConfig();
+        List<String> warnings = new ArrayList<>();
+
+        int configVersion = c.getInt("config-version", CONFIG_VERSION);
+        if (configVersion != CONFIG_VERSION) {
+            warnings.add("config-version=" + configVersion + "，当前插件期望 " + CONFIG_VERSION
+                    + "；缺失的新字段将使用安全默认值。保留原文件，不会覆盖你的配置。");
+        }
+
+        double range = boundedDouble(c, "tracking.range", 48.0, 1.0, 512.0, warnings);
+        int lifetime = boundedInt(c, "tracking.max-lifetime-ticks", 120, 1, 72000, warnings);
+        int delay = boundedInt(c, "tracking.activation-delay-ticks", 4, 0, 1200, warnings);
+        double turn = boundedDouble(c, "tracking.turn-rate-degrees-per-tick", 8.0, 0.1, 180.0, warnings);
+        double acceleration = boundedDouble(c, "tracking.acceleration-per-tick", 0.015, -1.0, 2.0, warnings);
+        double minSpeed = boundedDouble(c, "tracking.min-speed", 1.0, 0.01, 20.0, warnings);
+        double maxSpeed = boundedDouble(c, "tracking.max-speed", 2.8, 0.01, 50.0, warnings);
+        if (maxSpeed < minSpeed) {
+            warnings.add("tracking.max-speed 小于 min-speed，已在内存中提升为 " + minSpeed);
+            maxSpeed = minSpeed;
+        }
+
+        int globalLimit = boundedInt(c, "limits.max-tracked-arrows", 256, 1, 10000, warnings);
+        int perPlayerLimit = boundedInt(c, "limits.max-tracked-per-player", 32, 1, globalLimit, warnings);
+        int cooldown = boundedInt(c, "limits.launch-cooldown-ticks", 0, 0, 1200, warnings);
+        int particleInterval = boundedInt(c, "visual.particle-interval-ticks", 1, 1, 200, warnings);
+        int pageSize = boundedInt(c, "commands.help-page-size", 7, 4, 12, warnings);
+        int maxGive = boundedInt(c, "commands.max-give-amount", 64, 1, 2304, warnings);
+
+        Set<String> disabledWorlds = new LinkedHashSet<>();
+        for (String world : c.getStringList("worlds.disabled")) {
+            if (world != null && !world.isBlank()) {
+                disabledWorlds.add(world.toLowerCase(Locale.ROOT));
+            }
+        }
+
+        Map<String, String> messages = loadMessages(c);
+
+        current = new PluginSettings(
+                configVersion,
+                range,
+                lifetime,
+                delay,
+                turn,
+                acceleration,
+                minSpeed,
+                maxSpeed,
+                boundedDouble(c, "tracking.lead-ticks", 4.0, 0.0, 100.0, warnings),
+                c.getBoolean("tracking.dynamic-retargeting", true),
+                boundedDouble(c, "tracking.switch-advantage-blocks", 3.0, 0.0, 256.0, warnings),
+                c.getBoolean("tracking.require-line-of-sight", false),
+                c.getBoolean("tracking.target-creative", false),
+                c.getBoolean("tracking.target-spectator", false),
+                c.getBoolean("tracking.respect-vanish", true),
+                c.getBoolean("tracking.no-gravity", true),
+                globalLimit,
+                perPlayerLimit,
+                cooldown,
+                c.getBoolean("limits.cancel-rejected-shot", true),
+                c.getDouble("combat.override-arrow-damage", -1.0),
+                c.getBoolean("visual.glowing-arrow", false),
+                c.getBoolean("visual.particles", true),
+                particleInterval,
+                c.getBoolean("visual.target-marker-particles", true),
+                c.getBoolean("audio.launch-sound", true),
+                c.getBoolean("audio.lock-sounds", true),
+                c.getBoolean("effects.impact", true),
+                c.getBoolean("effects.self-destruct", true),
+                c.getBoolean("lifecycle.remove-arrows-on-disable", true),
+                c.getBoolean("lifecycle.recover-arrows-on-enable", true),
+                Collections.unmodifiableSet(disabledWorlds),
+                feedback(c, "feedback.launch", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
+                feedback(c, "feedback.lock-shooter", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
+                feedback(c, "feedback.lock-target", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
+                feedback(c, "feedback.rejection", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
+                color(c.getString("item.name", "&b&l制导弓")),
+                colorList(c.getStringList("item.lore")),
+                Collections.unmodifiableMap(messages),
+                pageSize,
+                maxGive
+        );
+        return new LoadReport(current, List.copyOf(warnings));
+    }
+
+    public TuneResult setTunable(String key, double value) {
+        Tunable tunable = TUNABLES.get(normalizeKey(key));
+        if (tunable == null) {
+            return TuneResult.failure("未知参数：" + key);
+        }
+        if (!Double.isFinite(value)) {
+            return TuneResult.failure("数值必须是有限数字。");
+        }
+        if (value < tunable.min() || value > tunable.max()) {
+            return TuneResult.failure(tunable.displayName() + "允许范围为 "
+                    + compact(tunable.min()) + "～" + compact(tunable.max()) + "。");
+        }
+        Object stored = isIntegerPath(tunable.path()) ? (int) Math.round(value) : value;
+        plugin.getConfig().set(tunable.path(), stored);
+        plugin.saveConfig();
+        LoadReport report = reload();
+        return TuneResult.success(tunable, value, report.warnings());
+    }
+
+    public TuneResult resetTunable(String key) {
+        Tunable tunable = TUNABLES.get(normalizeKey(key));
+        if (tunable == null) {
+            return TuneResult.failure("未知参数：" + key);
+        }
+        Object stored = isIntegerPath(tunable.path()) ? (int) tunable.defaultValue() : tunable.defaultValue();
+        plugin.getConfig().set(tunable.path(), stored);
+        plugin.saveConfig();
+        LoadReport report = reload();
+        return TuneResult.success(tunable, tunable.defaultValue(), report.warnings());
+    }
+
+    public LoadReport resetAllTunables() {
+        for (Tunable tunable : TUNABLES.values()) {
+            Object stored = isIntegerPath(tunable.path()) ? (int) tunable.defaultValue() : tunable.defaultValue();
+            plugin.getConfig().set(tunable.path(), stored);
+        }
+        plugin.saveConfig();
+        return reload();
+    }
+
+    public PresetResult applyPreset(String name) {
+        Preset preset = PRESETS.get(normalizeKey(name));
+        if (preset == null) {
+            return PresetResult.failure("未知预设：" + name);
+        }
+        for (Map.Entry<String, Double> entry : preset.values().entrySet()) {
+            Tunable tunable = TUNABLES.get(entry.getKey());
+            plugin.getConfig().set(tunable.path(), entry.getValue());
+        }
+        plugin.saveConfig();
+        LoadReport report = reload();
+        return PresetResult.success(preset, report.warnings());
+    }
+
+    public Map<String, Tunable> tunables() {
+        return TUNABLES;
+    }
+
+    public Map<String, Preset> presets() {
+        return PRESETS;
+    }
+
+    public double currentTunableValue(Tunable tunable) {
+        PluginSettings s = current;
+        return switch (tunable.key()) {
+            case "range" -> s.trackingRange();
+            case "lifetime" -> s.maxLifetimeTicks();
+            case "delay" -> s.activationDelayTicks();
+            case "turn" -> s.turnRateDegreesPerTick();
+            case "acceleration" -> s.accelerationPerTick();
+            case "min-speed" -> s.minSpeed();
+            case "max-speed" -> s.maxSpeed();
+            case "lead" -> s.leadTicks();
+            case "switch-advantage" -> s.switchAdvantageBlocks();
+            default -> throw new IllegalArgumentException("未映射的参数：" + tunable.key());
+        };
+    }
+
+    private static void register(Map<String, Tunable> map, Tunable tunable) {
+        map.put(tunable.key(), tunable);
+    }
+
+    private static String normalizeKey(String raw) {
+        return raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    private static boolean isIntegerPath(String path) {
+        return path.endsWith("ticks");
+    }
+
+    private static double boundedDouble(FileConfiguration c, String path, double def,
+                                        double min, double max, List<String> warnings) {
+        double value = c.getDouble(path, def);
+        if (!Double.isFinite(value)) {
+            warnings.add(path + " 不是有限数字，使用默认值 " + def);
+            return def;
+        }
+        if (value < min || value > max) {
+            double corrected = Math.max(min, Math.min(max, value));
+            warnings.add(path + "=" + value + " 超出安全范围，内存中修正为 " + corrected);
+            return corrected;
+        }
+        return value;
+    }
+
+    private static int boundedInt(FileConfiguration c, String path, int def,
+                                  int min, int max, List<String> warnings) {
+        int value = c.getInt(path, def);
+        if (value < min || value > max) {
+            int corrected = Math.max(min, Math.min(max, value));
+            warnings.add(path + "=" + value + " 超出安全范围，内存中修正为 " + corrected);
+            return corrected;
+        }
+        return value;
+    }
+
+    private static PluginSettings.FeedbackMode feedback(FileConfiguration c, String path,
+                                                         PluginSettings.FeedbackMode fallback,
+                                                         List<String> warnings) {
+        String raw = c.getString(path, fallback.name().toLowerCase(Locale.ROOT));
+        PluginSettings.FeedbackMode parsed = PluginSettings.FeedbackMode.parse(raw, fallback);
+        if (raw != null && !raw.equalsIgnoreCase(parsed.name())) {
+            warnings.add(path + "=" + raw + " 无效，使用 " + parsed.name().toLowerCase(Locale.ROOT));
+        }
+        return parsed;
+    }
+
+    private static Map<String, String> loadMessages(FileConfiguration c) {
+        Map<String, String> result = new LinkedHashMap<>();
+        defaults().forEach((key, value) -> result.put(key, color(c.getString("messages." + key, value))));
+        return result;
+    }
+
+    private static Map<String, String> defaults() {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("prefix", "&8[&b制导箭&8] &r");
+        m.put("no-permission", "&c你没有权限执行此操作。&7（{permission}）");
+        m.put("player-only", "&c该命令只能由游戏内玩家执行。");
+        m.put("player-not-found", "&c找不到在线玩家：&f{player}");
+        m.put("world-not-found", "&c找不到世界：&f{world}");
+        m.put("invalid-number", "&c{input} 不是有效数字。");
+        m.put("invalid-integer", "&c{input} 不是有效整数。");
+        m.put("invalid-amount", "&c数量必须是 {min}～{max} 的整数。");
+        m.put("unknown-command", "&c未知子命令：&f{input}&c。{suggestion}");
+        m.put("internal-error", "&c命令执行失败。错误编号：&f{reference}&c，请查看服务端日志。");
+        m.put("usage", "&e正确用法：&f{usage}");
+        m.put("launch", "&a制导箭已发射 &8· &7在途 &f{active}/{limit}");
+        m.put("lock-shooter", "&c锁定 &f{target} &8· &7距离 &f{distance}格");
+        m.put("lock-target", "&c警告：你已被 &f{shooter} &c的制导箭锁定");
+        m.put("rejected-permission", "&c你没有使用制导弓的权限。");
+        m.put("rejected-global-limit", "&e全服在途制导箭已达到上限 {limit}。");
+        m.put("rejected-player-limit", "&e你已有 {active}/{limit} 支制导箭在途。");
+        m.put("rejected-cooldown", "&e制导弓冷却中，还需 {ticks} tick。");
+        m.put("rejected-world", "&e当前世界已禁用制导弓。");
+        m.put("give-sender", "&a已给予 &f{player} &a制导弓 ×{amount}。{dropped}");
+        m.put("give-target", "&a你获得了制导弓 ×{amount}。");
+        m.put("clear", "&a已清除 &f{count} &a支在途制导箭。");
+        m.put("reload", "&a配置已原子重载。&7警告：&f{warnings}&7，当前在途箭保留。");
+        m.put("preset", "&a已应用预设：&f{name}&7（{key}）");
+        m.put("tune", "&a已设置 &f{key}&a = &f{value}&7（{description}）");
+        m.put("tune-reset", "&a已重置 &f{key}&a = &f{value}");
+        return m;
+    }
+
+    public static String color(String text) {
+        return text == null ? "" : text.replace('&', '§');
+    }
+
+    private static List<String> colorList(List<String> list) {
+        List<String> result = new ArrayList<>();
+        for (String line : list) {
+            result.add(color(line));
+        }
+        return List.copyOf(result);
+    }
+
+    public static String compact(double value) {
+        if (Math.rint(value) == value) {
+            return Long.toString(Math.round(value));
+        }
+        return String.format(Locale.ROOT, "%.4f", value).replaceAll("0+$", "").replaceAll("\\.$", "");
+    }
+
+    public record Tunable(String key, String path, double defaultValue,
+                          double min, double max, String displayName) {
+    }
+
+    public record Preset(String key, String displayName, Map<String, Double> values) {
+    }
+
+    public record LoadReport(PluginSettings settings, List<String> warnings) {
+    }
+
+    public record TuneResult(boolean success, String error, Tunable tunable,
+                             double value, List<String> warnings) {
+        static TuneResult success(Tunable tunable, double value, List<String> warnings) {
+            return new TuneResult(true, null, tunable, value, warnings);
+        }
+
+        static TuneResult failure(String error) {
+            return new TuneResult(false, error, null, 0.0, List.of());
+        }
+    }
+
+    public record PresetResult(boolean success, String error, Preset preset, List<String> warnings) {
+        static PresetResult success(Preset preset, List<String> warnings) {
+            return new PresetResult(true, null, preset, warnings);
+        }
+
+        static PresetResult failure(String error) {
+            return new PresetResult(false, error, null, List.of());
+        }
+    }
+}

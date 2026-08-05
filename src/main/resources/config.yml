@@ -1,0 +1,144 @@
+# HomingMissiles 2.0.0
+# Paper/Purpur 1.21.x，Java 21。
+# 速度单位为“方块/tick”；正常服务器每秒20 tick。
+# 修改后可执行 /hbow reload。在线调参可使用 /hbow tune。
+
+config-version: 2
+
+tracking:
+  # 箭从当前位置搜索玩家目标的最大距离。
+  range: 48.0
+
+  # 最大飞行寿命。120 tick = 6秒。
+  max-lifetime-ticks: 120
+
+  # 发射后延迟多久开始索敌，避免刚离弦便急转。
+  activation-delay-ticks: 4
+
+  # 每tick允许改变的最大飞行角度。
+  turn-rate-degrees-per-tick: 8.0
+
+  # 每tick增加的速度。可设为轻微负值形成减速，但不能低于 min-speed。
+  acceleration-per-tick: 0.015
+
+  min-speed: 1.0
+  max-speed: 2.8
+
+  # 按目标当前速度预判若干tick后的位置。0表示不预判。
+  lead-ticks: 4.0
+
+  # true：允许飞行中切换到明显更近的目标。
+  dynamic-retargeting: true
+
+  # 新目标至少要比当前目标近多少格才切换，防止目标接近时来回抖动。
+  switch-advantage-blocks: 3.0
+
+  # true：目标与箭之间被方块遮挡时不锁定。会增加计算成本。
+  require-line-of-sight: false
+
+  target-creative: false
+  target-spectator: false
+
+  # true：尊重常见隐身插件的 canSee 结果，射手看不到的玩家不会被锁定。
+  respect-vanish: true
+
+  # true：关闭箭重力；仍保留原版碰撞和伤害。
+  no-gravity: true
+
+limits:
+  # 全服务器同时在途的制导箭上限。
+  max-tracked-arrows: 256
+
+  # 单个玩家同时在途的制导箭上限。
+  max-tracked-per-player: 32
+
+  # 每次发射之间的冷却tick。0表示关闭。
+  launch-cooldown-ticks: 0
+
+  # 被权限、世界、冷却或上限拒绝时是否取消射击。
+  # true可避免“制导弓突然射出普通箭”的误解。
+  cancel-rejected-shot: true
+
+combat:
+  # -1：保留原版箭伤害；其他非负数：覆盖箭的基础伤害。
+  override-arrow-damage: -1.0
+
+worlds:
+  # 按世界文件夹名称填写，不区分大小写。
+  disabled: []
+  # 示例：
+  # disabled: [world_nether, lobby]
+
+visual:
+  glowing-arrow: false
+  particles: true
+  particle-interval-ticks: 1
+  target-marker-particles: true
+
+audio:
+  launch-sound: true
+  lock-sounds: true
+
+# 可选值：actionbar / chat / off
+# 高频战斗反馈默认走Action Bar，避免刷屏。
+feedback:
+  launch: actionbar
+  lock-shooter: actionbar
+  lock-target: actionbar
+  rejection: actionbar
+
+effects:
+  impact: true
+  self-destruct: true
+
+lifecycle:
+  # true：插件关闭/服务器重载时删除在途箭。
+  # false：保留箭，并依靠下面的恢复机制在再次启用时接管。
+  remove-arrows-on-disable: true
+
+  # 启用时恢复已加载区块里带持久化标记的制导箭。
+  recover-arrows-on-enable: true
+
+commands:
+  help-page-size: 7
+  max-give-amount: 64
+
+item:
+  name: '&b&l制导弓'
+  lore:
+    - '&7连续追踪最近的其他玩家'
+    - '&7每支箭独立识别并排除自己的发射者'
+    - '&7目标失效后动态重选；不使用瞬移'
+    - '&8多人、多箭并发 · 真实Motion转向'
+
+# 所有消息支持 & 颜色符号和 {placeholder} 占位符。
+# 未列出的消息使用插件内置安全默认值。
+messages:
+  prefix: '&8[&b制导箭&8] &r'
+  no-permission: '&c你没有权限执行此操作。&7（{permission}）'
+  player-only: '&c该命令只能由游戏内玩家执行。'
+  player-not-found: '&c找不到在线玩家：&f{player}'
+  world-not-found: '&c找不到世界：&f{world}'
+  invalid-number: '&c{input} 不是有效数字。'
+  invalid-integer: '&c{input} 不是有效整数。'
+  invalid-amount: '&c数量必须是 {min}～{max} 的整数。'
+  unknown-command: '&c未知子命令：&f{input}&c。{suggestion}'
+  internal-error: '&c命令执行失败。错误编号：&f{reference}&c，请查看服务端日志。'
+  usage: '&e正确用法：&f{usage}'
+
+  launch: '&a制导箭已发射 &8· &7在途 &f{active}/{limit}'
+  lock-shooter: '&c锁定 &f{target} &8· &7距离 &f{distance}格'
+  lock-target: '&c警告：你已被 &f{shooter} &c的制导箭锁定'
+  rejected-permission: '&c你没有使用制导弓的权限。'
+  rejected-global-limit: '&e全服在途制导箭已达到上限 {limit}。'
+  rejected-player-limit: '&e你已有 {active}/{limit} 支制导箭在途。'
+  rejected-cooldown: '&e制导弓冷却中，还需 {ticks} tick。'
+  rejected-world: '&e当前世界已禁用制导弓。'
+
+  give-sender: '&a已给予 &f{player} &a制导弓 ×{amount}。{dropped}'
+  give-target: '&a你获得了制导弓 ×{amount}。'
+  clear: '&a已清除 &f{count} &a支在途制导箭。'
+  reload: '&a配置已原子重载。&7警告：&f{warnings}&7，当前在途箭保留。'
+  preset: '&a已应用预设：&f{name}&7（{key}）'
+  tune: '&a已设置 &f{key}&a = &f{value}&7（{description}）'
+  tune-reset: '&a已重置 &f{key}&a = &f{value}'

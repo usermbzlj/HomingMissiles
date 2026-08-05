@@ -1,0 +1,79 @@
+name: HomingMissiles
+version: 2.0.0
+main: cn.yjj.homingmissiles.HomingMissilesPlugin
+api-version: '1.21'
+authors: [YJJ, OpenAI]
+description: 专业的多人、多箭、连续物理制导弓插件
+load: POSTWORLD
+commands:
+  homingbow:
+    description: 制导弓玩家与管理命令
+    aliases: [hbow, 制导弓]
+    usage: /hbow help
+
+permissions:
+  homingmissiles.use:
+    description: 允许使用制导弓
+    default: true
+
+  homingmissiles.target.exempt:
+    description: 不会成为制导箭目标
+    default: false
+
+  homingmissiles.bypass.limits:
+    description: 绕过全服/单玩家箭数限制和发射冷却
+    default: op
+
+  homingmissiles.command.help:
+    description: 查看制导弓命令帮助
+    default: true
+  homingmissiles.command.status:
+    description: 查看基本运行状态
+    default: true
+  homingmissiles.command.status.verbose:
+    description: 查看详细性能和诊断状态
+    default: op
+  homingmissiles.command.version:
+    description: 查看插件版本
+    default: true
+  homingmissiles.command.inspect.self:
+    description: 检查自己的制导状态
+    default: true
+  homingmissiles.command.inspect.others:
+    description: 检查其他玩家的制导状态
+    default: op
+  homingmissiles.command.clear.own:
+    description: 清除自己的在途制导箭
+    default: true
+  homingmissiles.command.clear.admin:
+    description: 按全服、玩家或世界清除制导箭
+    default: op
+  homingmissiles.command.get:
+    description: 给自己领取制导弓
+    default: op
+  homingmissiles.command.give:
+    description: 向其他玩家给予制导弓
+    default: op
+  homingmissiles.command.reload:
+    description: 重载并校验配置
+    default: op
+  homingmissiles.command.tune:
+    description: 在线查询和修改制导参数
+    default: op
+  homingmissiles.command.preset:
+    description: 应用制导参数预设
+    default: op
+
+  homingmissiles.admin:
+    description: HomingMissiles 完整管理权限
+    default: op
+    children:
+      homingmissiles.command.status.verbose: true
+      homingmissiles.command.inspect.others: true
+      homingmissiles.command.clear.admin: true
+      homingmissiles.command.get: true
+      homingmissiles.command.give: true
+      homingmissiles.command.reload: true
+      homingmissiles.command.tune: true
+      homingmissiles.command.preset: true
+      homingmissiles.bypass.limits: true

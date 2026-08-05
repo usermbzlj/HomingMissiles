@@ -1,0 +1,30 @@
+# Maven / local verification
+target/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local development server
+dev-server/
+run/
+logs/
+world/
+world_nether/
+world_the_end/
+eula.txt
+server.properties
+*.log
+
+# Secrets and local Maven settings
+.env
+settings.xml
