@@ -13,7 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.Objects;
 
 public final class HomingMissilesPlugin extends JavaPlugin {
-    public static final String VERSION = "2.0.0";
+    public static final String VERSION = "3.0.0";
 
     private SettingsManager settingsManager;
     private MessageService messages;
@@ -43,6 +43,7 @@ public final class HomingMissilesPlugin extends JavaPlugin {
 
         homingService.start();
         int recovered = homingService.recoverLoadedArrows();
+        homingService.refreshHudResources();
 
         getLogger().info("HomingMissiles " + VERSION + " 已启用：多人、多箭、连续物理制导。"
                 + " 追踪上限=" + settingsManager.current().maxTrackedArrows()

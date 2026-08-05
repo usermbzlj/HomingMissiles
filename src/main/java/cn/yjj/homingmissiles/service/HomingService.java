@@ -4,6 +4,7 @@ import cn.yjj.homingmissiles.HomingMissilesPlugin;
 import cn.yjj.homingmissiles.config.PluginSettings;
 import cn.yjj.homingmissiles.config.SettingsManager;
 import cn.yjj.homingmissiles.model.TrackedArrow;
+import cn.yjj.homingmissiles.util.GuidanceMath;
 import cn.yjj.homingmissiles.util.MessageService;
 import cn.yjj.homingmissiles.util.VectorMath;
 import org.bukkit.GameMode;
@@ -15,6 +16,7 @@ import org.bukkit.World;
 import org.bukkit.entity.AbstractArrow;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerResourcePackStatusEvent;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
@@ -171,6 +173,20 @@ public final class HomingService {
     public void forgetPlayer(UUID playerId) {
         lastLaunchTick.remove(playerId);
         lockHud.forgetPlayer(playerId);
+    }
+
+    public void prepareHud(Player player) {
+        lockHud.preparePlayer(player);
+    }
+
+    public void handleResourcePackStatus(PlayerResourcePackStatusEvent event) {
+        lockHud.handleResourcePackStatus(event);
+    }
+
+    public void refreshHudResources() {
+        for (Player player : plugin.getServer().getOnlinePlayers()) {
+            lockHud.preparePlayer(player);
+        }
     }
 
     public TrackResult tryTrack(Player shooter, AbstractArrow arrow) {
@@ -397,17 +413,20 @@ public final class HomingService {
         if (target == null) {
             state.targetId(null);
             state.lockNotifiedTarget(null);
+            state.clearLockObservation();
             spawnSearchEffect(arrow, state);
             return true;
         }
 
-        state.targetId(target.getUniqueId());
-        notifyLockIfNeeded(state, target);
-        steerArrow(arrow, target);
-        spawnTrackingEffects(arrow, state);
-
         Location arrowLocation = arrow.getLocation();
         double distance = arrowLocation.distance(target.getEyeLocation());
+        state.observeLock(target.getUniqueId(), distance,
+                settings.terminalBoostDelayTicks(), settings.terminalEscapeTriggerTicks());
+        state.targetId(target.getUniqueId());
+        notifyLockIfNeeded(state, target);
+        steerArrow(state, arrow, target);
+        spawnTrackingEffects(arrow, state);
+
         lockHud.reportLock(target, arrowLocation, distance);
         return true;
     }
@@ -416,15 +435,17 @@ public final class HomingService {
         PluginSettings settings = settingsManager.current();
         World world = arrow.getWorld();
         Location arrowLocation = arrow.getLocation();
-        double rangeSquared = settings.trackingRange() * settings.trackingRange();
+        double acquisitionRangeSquared = settings.trackingRange() * settings.trackingRange();
+        double retentionRangeSquared = settings.lockRetentionRange() * settings.lockRetentionRange();
 
         Player current = state.targetId() == null ? null : plugin.getServer().getPlayer(state.targetId());
-        boolean currentValid = isValidTarget(current, state, world, arrowLocation, rangeSquared, arrow);
+        boolean currentValid = isValidTarget(
+                current, state, world, arrowLocation, retentionRangeSquared, arrow);
 
         Player nearest = null;
-        double nearestDistanceSquared = rangeSquared;
+        double nearestDistanceSquared = acquisitionRangeSquared;
         for (Player candidate : world.getPlayers()) {
-            if (!isValidTarget(candidate, state, world, arrowLocation, rangeSquared, arrow)) {
+            if (!isValidTarget(candidate, state, world, arrowLocation, acquisitionRangeSquared, arrow)) {
                 continue;
             }
             double distanceSquared = candidate.getEyeLocation().distanceSquared(arrowLocation);
@@ -482,28 +503,41 @@ public final class HomingService {
         return !settings.requireLineOfSight() || player.hasLineOfSight(arrow);
     }
 
-    private void steerArrow(AbstractArrow arrow, Player target) {
+    private void steerArrow(TrackedArrow state, AbstractArrow arrow, Player target) {
         PluginSettings settings = settingsManager.current();
         Vector currentVelocity = arrow.getVelocity();
         Location arrowLocation = arrow.getLocation();
 
+        Vector relativePosition = target.getEyeLocation().toVector().subtract(arrowLocation.toVector());
+        double currentSpeed = VectorMath.isFinite(currentVelocity) ? currentVelocity.length() : 0.0;
+        double interceptTicks = GuidanceMath.interceptTimeTicks(
+                relativePosition,
+                target.getVelocity(),
+                Math.max(currentSpeed, settings.minSpeed()),
+                settings.maxLeadTicks());
+        double leadTicks = Math.max(settings.leadTicks(), interceptTicks);
         Vector predictedTarget = target.getEyeLocation().toVector()
-                .add(target.getVelocity().clone().multiply(settings.leadTicks()));
+                .add(target.getVelocity().clone().multiply(leadTicks));
         Vector toTarget = predictedTarget.subtract(arrowLocation.toVector());
         if (!VectorMath.isFinite(toTarget) || toTarget.lengthSquared() < 1.0E-8) {
             return;
         }
 
         Vector desiredDirection = toTarget.normalize();
-        double currentSpeed = VectorMath.isFinite(currentVelocity) ? currentVelocity.length() : 0.0;
         Vector currentDirection = currentSpeed < 1.0E-6
                 ? desiredDirection.clone()
                 : currentVelocity.clone().normalize();
 
         Vector newDirection = VectorMath.rotateTowards(
                 currentDirection, desiredDirection, Math.toRadians(settings.turnRateDegreesPerTick()));
+        double acceleration = state.terminalBoosted()
+                ? settings.terminalAccelerationPerTick()
+                : settings.accelerationPerTick();
+        double maximumSpeed = state.terminalBoosted()
+                ? settings.terminalMaxSpeed()
+                : settings.maxSpeed();
         double newSpeed = VectorMath.clamp(
-                currentSpeed + settings.accelerationPerTick(), settings.minSpeed(), settings.maxSpeed());
+                currentSpeed + acceleration, settings.minSpeed(), maximumSpeed);
         Vector newVelocity = newDirection.multiply(newSpeed);
         if (!VectorMath.isFinite(newVelocity)) {
             throw new IllegalStateException("制导速度出现非有限值");
@@ -530,7 +564,7 @@ public final class HomingService {
         }
 
         if (shooter != null && shooter.isOnline()) {
-            // 不向射手暴露目标名、距离、方向或速度；BossBar 也只显示在途通道占用。
+            // 不向射手暴露目标名、距离、方向或速度；像素 HMD 也只显示在途通道占用。
             messages.feedback(shooter, settings.lockShooterFeedback(), "guidance-link");
         }
         messages.feedback(target, settings.lockTargetFeedback(), "inbound-warning");
@@ -566,6 +600,10 @@ public final class HomingService {
         Location exhaust = exhaustLocation(arrow, 0.38);
         world.spawnParticle(Particle.SMALL_FLAME, exhaust, 2, 0.018, 0.018, 0.018, 0.006);
         world.spawnParticle(Particle.WHITE_SMOKE, exhaust, 2, 0.035, 0.035, 0.035, 0.012);
+        if (state.terminalBoosted()) {
+            world.spawnParticle(Particle.FLAME, exhaust, 3, 0.025, 0.025, 0.025, 0.018);
+            world.spawnParticle(Particle.CLOUD, exhaust, 1, 0.02, 0.02, 0.02, 0.008);
+        }
         if (state.ageTicks() % 4 == 0) {
             world.spawnParticle(Particle.END_ROD, exhaust, 1, 0.012, 0.012, 0.012, 0.0);
         }

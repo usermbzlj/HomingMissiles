@@ -19,14 +19,6 @@ function Invoke-Checked([scriptblock]$Command, [string]$Step) {
     }
 }
 
-function Write-ArgFile([System.IO.FileInfo[]]$Files, [string]$Path) {
-    $Lines = $Files | ForEach-Object {
-        '"' + $_.FullName.Replace('\', '\\') + '"'
-    }
-    # javac @argfile rejects UTF-8 BOM
-    [System.IO.File]::WriteAllLines($Path, $Lines, [System.Text.UTF8Encoding]::new($false))
-}
-
 Require-Command "java"
 Require-Command "javac"
 
@@ -39,24 +31,19 @@ $StubSources = Get-ChildItem (Join-Path $Root "stubs\src\main\java") -Recurse -F
 $MainSources = Get-ChildItem (Join-Path $Root "src\main\java") -Recurse -Filter *.java
 $TestSources = Get-ChildItem (Join-Path $Root "test") -Recurse -Filter *.java
 
-$StubArgs = Join-Path $Build "stubs.args"
-$MainArgs = Join-Path $Build "main.args"
-$TestArgs = Join-Path $Build "test.args"
-
-Write-ArgFile $StubSources $StubArgs
-Write-ArgFile $MainSources $MainArgs
-Write-ArgFile $TestSources $TestArgs
-
-Invoke-Checked { javac --release 21 -encoding UTF-8 -d $Stubs "@$StubArgs" } "compile stubs"
-Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $Stubs -d $Classes "@$MainArgs" } "compile main"
+# Pass source paths directly. javac @argfiles use the JVM platform charset, which
+# is often GBK on Chinese Windows and corrupts UTF-8 argument files containing
+# a Chinese workspace path.
+Invoke-Checked { javac --release 21 -encoding UTF-8 -d $Stubs $StubSources.FullName } "compile stubs"
+Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $Stubs -d $Classes $MainSources.FullName } "compile main"
 
 Copy-Item (Join-Path $Root "src\main\resources\*") $Classes -Force
 
 $TestClasspath = "$Stubs;$Classes"
-Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $TestClasspath -d $Tests "@$TestArgs" } "compile tests"
+Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $TestClasspath -d $Tests $TestSources.FullName } "compile tests"
 
 $RuntimeClasspath = "$Stubs;$Classes;$Tests"
-foreach ($Test in @("VectorMathTest", "CommandUtilTest", "SettingsUtilityTest", "HudFormatTest")) {
+foreach ($Test in @("VectorMathTest", "GuidanceMathTest", "CommandUtilTest", "SettingsUtilityTest", "HudFormatTest")) {
     Invoke-Checked { java -cp $RuntimeClasspath "cn.yjj.homingmissiles.$Test" } "run $Test"
 }
 

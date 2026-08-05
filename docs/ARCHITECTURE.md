@@ -19,12 +19,12 @@ HomingMissilesPlugin
 ├─ SettingsManager ──> PluginSettings
 ├─ MessageService
 ├─ HomingBowFactory
-├─ HomingService ──> TrackedArrow / VectorMath / LockHudService
+├─ HomingService ──> TrackedArrow / GuidanceMath / VectorMath / LockHudService
 ├─ HomingListener ──> HomingService
 └─ HomingBowCommand ──> SettingsManager / HomingService / HomingBowFactory
 ```
 
-`LockHudService` 在每个制导 tick 聚合出站与来袭关系，维护原生 BossBar，并向被锁目标播放来自导弹方向的分层空间警报。不参与索敌与转向，也不会接收或向射手展示目标身份等具体遥测。
+`LockHudService` 在每个制导 tick 聚合出站与来袭关系，通过资源包位图字体绘制像素 HMD，并向被锁目标播放来自导弹方向的分层空间警报。资源包不可用时才维护 BossBar 降级界面。它不参与索敌与转向，也不会向射手展示目标身份等具体遥测。
 
 `HomingMissilesPlugin` 是组合根。其他组件不应通过静态全局单例重新定位服务。
 
@@ -72,7 +72,8 @@ safeTick
   ├─ processArrow(state)
   │   ├─ 验证箭实体
   │   ├─ 增加年龄并检查寿命
-  │   ├─ 选取目标
+  │   ├─ 捕获或验证保持圈内的目标
+  │   ├─ 动态截击解 / 后程点火判定
   │   ├─ steerArrow
   │   ├─ notifyLockIfNeeded
   │   └─ spawn effects
@@ -91,11 +92,11 @@ safeTick
 - 不是射手；
 - 没有 `homingmissiles.target.exempt`；
 - 游戏模式符合配置；
-- 在索敌范围内；
+- 新目标在首次捕获圈内，或当前锁定目标仍在更大的保持圈内；
 - 若开启 vanish 尊重，则射手可见目标；
 - 若开启视线要求，则视线无遮挡。
 
-动态重选不是每次无条件切换。新目标需要满足 `switch-advantage-blocks` 的距离优势，避免两名玩家距离接近时频繁抖动。
+动态重选不是每次无条件切换。新目标必须进入首次捕获圈，并满足 `switch-advantage-blocks` 的距离优势；当前目标则能在 `lock-retention-range` 内保持锁定。失锁不会把远处目标当作新目标重新捕获。
 
 ## 6. 飞行数学
 
@@ -105,15 +106,20 @@ safeTick
 - 期望目标方向为 `d`;
 - 每 tick 最大转角为 `θ`;
 - 当前速度大小为 `s`;
-- 加速度为 `a`.
+- 当前推进段加速度为 `a`；
+- 当前推进段速度上限为 `sMax`。
 
 处理过程：
 
 ```text
 newDirection = rotateTowards(v, d, θ)
-newSpeed = clamp(s + a, minSpeed, maxSpeed)
+interceptTime = solve(|relativePosition + targetVelocity × t| = missileSpeed × t)
+aimPoint = targetPosition + targetVelocity × clamp(interceptTime, leadTicks, maxLeadTicks)
+newSpeed = clamp(s + a, minSpeed, sMax)
 newVelocity = newDirection × newSpeed
 ```
+
+当锁定持续达到 `terminal-boost.delay-ticks`，或距离连续增加达到 `escape-trigger-ticks`，`TrackedArrow` 会不可逆地记为后程点火；之后使用更高的加速度与速度上限，直至命中或自毁。无正实数截击解时会使用 `max-lead-ticks` 提前量，不会退回只追目标当前位置。
 
 `VectorMath.rotateTowards` 使用轴角旋转，并处理：
 

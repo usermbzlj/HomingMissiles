@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 public final class SettingsManager {
-    public static final int CONFIG_VERSION = 4;
+    public static final int CONFIG_VERSION = 5;
     public static final int HARD_MAX_TRACKED_PER_PLAYER = 4;
 
     private static final Map<String, Tunable> TUNABLES;
@@ -21,24 +21,32 @@ public final class SettingsManager {
 
     static {
         Map<String, Tunable> tunables = new LinkedHashMap<>();
-        register(tunables, new Tunable("range", "tracking.range", 48.0, 4.0, 256.0, "索敌范围（格）"));
-        register(tunables, new Tunable("lifetime", "tracking.max-lifetime-ticks", 120.0, 20.0, 1200.0, "寿命（tick）"));
+        register(tunables, new Tunable("range", "tracking.range", 80.0, 4.0, 256.0, "首次捕获范围（格）"));
+        register(tunables, new Tunable("retention-range", "tracking.lock-retention-range", 192.0, 8.0, 512.0, "锁定保持范围（格）"));
+        register(tunables, new Tunable("lifetime", "tracking.max-lifetime-ticks", 300.0, 20.0, 1200.0, "寿命（tick）"));
         register(tunables, new Tunable("delay", "tracking.activation-delay-ticks", 4.0, 0.0, 100.0, "启动延迟（tick）"));
         register(tunables, new Tunable("turn", "tracking.turn-rate-degrees-per-tick", 8.0, 0.1, 180.0, "每tick最大转角（度）"));
-        register(tunables, new Tunable("acceleration", "tracking.acceleration-per-tick", 0.015, -0.2, 0.5, "每tick加速度"));
-        register(tunables, new Tunable("min-speed", "tracking.min-speed", 1.0, 0.05, 10.0, "最低速度"));
-        register(tunables, new Tunable("max-speed", "tracking.max-speed", 2.8, 0.05, 20.0, "最高速度"));
+        register(tunables, new Tunable("acceleration", "tracking.acceleration-per-tick", 0.025, -0.2, 0.5, "巡航段每tick加速度"));
+        register(tunables, new Tunable("min-speed", "tracking.min-speed", 1.2, 0.05, 10.0, "最低速度"));
+        register(tunables, new Tunable("max-speed", "tracking.max-speed", 3.4, 0.05, 20.0, "巡航段最高速度"));
+        register(tunables, new Tunable("terminal-delay", "tracking.terminal-boost.delay-ticks", 45.0, 0.0, 400.0, "后程助推延迟（tick）"));
+        register(tunables, new Tunable("terminal-acceleration", "tracking.terminal-boost.acceleration-per-tick", 0.075, 0.0, 2.0, "后程每tick加速度"));
+        register(tunables, new Tunable("terminal-max-speed", "tracking.terminal-boost.max-speed", 5.6, 0.05, 30.0, "后程最高速度"));
         register(tunables, new Tunable("lead", "tracking.lead-ticks", 4.0, 0.0, 40.0, "目标预判tick"));
+        register(tunables, new Tunable("max-lead", "tracking.max-lead-ticks", 24.0, 0.0, 100.0, "最大截击预判tick"));
         register(tunables, new Tunable("switch-advantage", "tracking.switch-advantage-blocks", 3.0, 0.0, 64.0, "切换目标所需距离优势"));
         TUNABLES = Collections.unmodifiableMap(tunables);
 
         Map<String, Preset> presets = new LinkedHashMap<>();
         presets.put("balanced", new Preset("balanced", "均衡", Map.of(
-                "turn", 8.0, "acceleration", 0.015, "min-speed", 1.0, "max-speed", 2.8, "lead", 4.0)));
+                "turn", 8.0, "acceleration", 0.025, "min-speed", 1.2, "max-speed", 3.4,
+                "terminal-acceleration", 0.075, "terminal-max-speed", 5.6, "lead", 4.0, "max-lead", 24.0)));
         presets.put("agile", new Preset("agile", "高机动", Map.of(
-                "turn", 14.0, "acceleration", 0.025, "min-speed", 1.1, "max-speed", 3.2, "lead", 5.0)));
+                "turn", 14.0, "acceleration", 0.04, "min-speed", 1.3, "max-speed", 3.8,
+                "terminal-acceleration", 0.1, "terminal-max-speed", 6.2, "lead", 5.0, "max-lead", 28.0)));
         presets.put("realistic", new Preset("realistic", "大转弯半径", Map.of(
-                "turn", 4.5, "acceleration", 0.008, "min-speed", 0.9, "max-speed", 2.4, "lead", 6.0)));
+                "turn", 4.5, "acceleration", 0.018, "min-speed", 1.0, "max-speed", 3.0,
+                "terminal-acceleration", 0.06, "terminal-max-speed", 5.0, "lead", 6.0, "max-lead", 30.0)));
         PRESETS = Collections.unmodifiableMap(presets);
     }
 
@@ -64,16 +72,36 @@ public final class SettingsManager {
                     + "；缺失的新字段将使用安全默认值。保留原文件，不会覆盖你的配置。");
         }
 
-        double range = boundedDouble(c, "tracking.range", 48.0, 1.0, 512.0, warnings);
-        int lifetime = boundedInt(c, "tracking.max-lifetime-ticks", 120, 1, 72000, warnings);
+        double range = boundedDouble(c, "tracking.range", 80.0, 1.0, 512.0, warnings);
+        double retentionRange = boundedDouble(c, "tracking.lock-retention-range", 192.0, 1.0, 1024.0, warnings);
+        if (retentionRange < range) {
+            warnings.add("tracking.lock-retention-range 小于首次捕获范围，已在内存中提升为 " + range);
+            retentionRange = range;
+        }
+        int lifetime = boundedInt(c, "tracking.max-lifetime-ticks", 300, 1, 72000, warnings);
         int delay = boundedInt(c, "tracking.activation-delay-ticks", 4, 0, 1200, warnings);
         double turn = boundedDouble(c, "tracking.turn-rate-degrees-per-tick", 8.0, 0.1, 180.0, warnings);
-        double acceleration = boundedDouble(c, "tracking.acceleration-per-tick", 0.015, -1.0, 2.0, warnings);
-        double minSpeed = boundedDouble(c, "tracking.min-speed", 1.0, 0.01, 20.0, warnings);
-        double maxSpeed = boundedDouble(c, "tracking.max-speed", 2.8, 0.01, 50.0, warnings);
+        double acceleration = boundedDouble(c, "tracking.acceleration-per-tick", 0.025, -1.0, 2.0, warnings);
+        double minSpeed = boundedDouble(c, "tracking.min-speed", 1.2, 0.01, 20.0, warnings);
+        double maxSpeed = boundedDouble(c, "tracking.max-speed", 3.4, 0.01, 50.0, warnings);
         if (maxSpeed < minSpeed) {
             warnings.add("tracking.max-speed 小于 min-speed，已在内存中提升为 " + minSpeed);
             maxSpeed = minSpeed;
+        }
+        int terminalDelay = boundedInt(c, "tracking.terminal-boost.delay-ticks", 45, 0, 1200, warnings);
+        int terminalEscapeTrigger = boundedInt(c, "tracking.terminal-boost.escape-trigger-ticks", 6, 1, 100, warnings);
+        double terminalAcceleration = boundedDouble(
+                c, "tracking.terminal-boost.acceleration-per-tick", 0.075, 0.0, 3.0, warnings);
+        double terminalMaxSpeed = boundedDouble(c, "tracking.terminal-boost.max-speed", 5.6, 0.01, 60.0, warnings);
+        if (terminalMaxSpeed < maxSpeed) {
+            warnings.add("tracking.terminal-boost.max-speed 小于巡航最高速度，已在内存中提升为 " + maxSpeed);
+            terminalMaxSpeed = maxSpeed;
+        }
+        double leadTicks = boundedDouble(c, "tracking.lead-ticks", 4.0, 0.0, 100.0, warnings);
+        double maxLeadTicks = boundedDouble(c, "tracking.max-lead-ticks", 24.0, 0.0, 200.0, warnings);
+        if (maxLeadTicks < leadTicks) {
+            warnings.add("tracking.max-lead-ticks 小于基础预判，已在内存中提升为 " + leadTicks);
+            maxLeadTicks = leadTicks;
         }
 
         int globalLimit = boundedInt(c, "limits.max-tracked-arrows", 128, 1, 10000, warnings);
@@ -91,6 +119,20 @@ public final class SettingsManager {
         }
         int bowPowerLevel = boundedInt(c, "item.enchantments.power-level", 5, 0, 5, warnings);
 
+        String resourcePackUrl = c.getString("hud.resource-pack.url", "").trim();
+        if (!resourcePackUrl.isEmpty() && (!isHttpUrl(resourcePackUrl) || !isAscii(resourcePackUrl))) {
+            warnings.add("hud.resource-pack.url 必须是只含 ASCII 的 http/https URL，已禁用自动发送");
+            resourcePackUrl = "";
+        }
+        String resourcePackSha1 = c.getString("hud.resource-pack.sha1", "").trim().toLowerCase(Locale.ROOT);
+        if (!resourcePackSha1.isEmpty() && !resourcePackSha1.matches("[0-9a-f]{40}")) {
+            warnings.add("hud.resource-pack.sha1 必须是40位十六进制 SHA-1，已忽略");
+            resourcePackSha1 = "";
+        }
+        if (!resourcePackUrl.isEmpty() && resourcePackSha1.isEmpty()) {
+            warnings.add("hud.resource-pack.url 已配置但 sha1 为空；建议填写构建产物的 SHA-1 以启用客户端缓存与完整性校验");
+        }
+
         Set<String> disabledWorlds = new LinkedHashSet<>();
         for (String world : c.getStringList("worlds.disabled")) {
             if (world != null && !world.isBlank()) {
@@ -103,13 +145,19 @@ public final class SettingsManager {
         current = new PluginSettings(
                 configVersion,
                 range,
+                retentionRange,
                 lifetime,
                 delay,
                 turn,
                 acceleration,
                 minSpeed,
                 maxSpeed,
-                boundedDouble(c, "tracking.lead-ticks", 4.0, 0.0, 100.0, warnings),
+                terminalDelay,
+                terminalEscapeTrigger,
+                terminalAcceleration,
+                terminalMaxSpeed,
+                leadTicks,
+                maxLeadTicks,
                 c.getBoolean("tracking.dynamic-retargeting", true),
                 boundedDouble(c, "tracking.switch-advantage-blocks", 3.0, 0.0, 256.0, warnings),
                 c.getBoolean("tracking.require-line-of-sight", false),
@@ -138,8 +186,14 @@ public final class SettingsManager {
                 feedback(c, "feedback.lock-target", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 feedback(c, "feedback.rejection", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 c.getBoolean("hud.enabled", true),
+                c.getBoolean("hud.pixel-overlay", true),
                 c.getBoolean("hud.shooter-bossbar", true),
                 c.getBoolean("hud.target-bossbar", true),
+                resourcePackUrl,
+                resourcePackSha1,
+                c.getBoolean("hud.resource-pack.required", false),
+                color(c.getString("hud.resource-pack.prompt", "&b启用像素化导弹头显")),
+                c.getBoolean("hud.resource-pack.assume-server-pack-provides-hud", false),
                 c.getBoolean("hud.warning-audio", true),
                 warningMin,
                 warningMax,
@@ -222,13 +276,18 @@ public final class SettingsManager {
         PluginSettings s = current;
         return switch (tunable.key()) {
             case "range" -> s.trackingRange();
+            case "retention-range" -> s.lockRetentionRange();
             case "lifetime" -> s.maxLifetimeTicks();
             case "delay" -> s.activationDelayTicks();
             case "turn" -> s.turnRateDegreesPerTick();
             case "acceleration" -> s.accelerationPerTick();
             case "min-speed" -> s.minSpeed();
             case "max-speed" -> s.maxSpeed();
+            case "terminal-delay" -> s.terminalBoostDelayTicks();
+            case "terminal-acceleration" -> s.terminalAccelerationPerTick();
+            case "terminal-max-speed" -> s.terminalMaxSpeed();
             case "lead" -> s.leadTicks();
+            case "max-lead" -> s.maxLeadTicks();
             case "switch-advantage" -> s.switchAdvantageBlocks();
             default -> throw new IllegalArgumentException("未映射的参数：" + tunable.key());
         };
@@ -240,6 +299,15 @@ public final class SettingsManager {
 
     private static String normalizeKey(String raw) {
         return raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    private static boolean isHttpUrl(String value) {
+        String normalized = value.toLowerCase(Locale.ROOT);
+        return normalized.startsWith("https://") || normalized.startsWith("http://");
+    }
+
+    private static boolean isAscii(String value) {
+        return value.chars().allMatch(character -> character >= 0x20 && character <= 0x7e);
     }
 
     private static boolean isIntegerPath(String path) {

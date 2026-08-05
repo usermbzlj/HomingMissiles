@@ -52,7 +52,7 @@ mvn -U clean package
 ## 4. 检查 JAR
 
 ```bash
-jar tf target/HomingMissiles-2.0.0.jar
+jar tf target/HomingMissiles-3.0.0.jar
 ```
 
 必须包含：
@@ -77,9 +77,11 @@ test/
 检查版本：
 
 ```bash
-unzip -p target/HomingMissiles-2.0.0.jar plugin.yml
-unzip -p target/HomingMissiles-2.0.0.jar META-INF/MANIFEST.MF
+unzip -p target/HomingMissiles-3.0.0.jar plugin.yml
+unzip -p target/HomingMissiles-3.0.0.jar META-INF/MANIFEST.MF
 ```
+
+同时检查 `target/hud-packs/` 中存在两个 ZIP、两个 `.sha1` 和预览 PNG。解压 ZIP 后必须包含 `pack.mcmeta`、`assets/homingmissiles/font/hud.json` 和像素纹理；人工确认预览中的透明背景、准星、四挂点和三种威胁颜色均无裁切。
 
 ## 5. 实机测试
 
@@ -100,13 +102,15 @@ unzip -p target/HomingMissiles-2.0.0.jar META-INF/MANIFEST.MF
 Linux：
 
 ```bash
-sha256sum target/HomingMissiles-2.0.0.jar > SHA256SUMS.txt
+sha256sum target/HomingMissiles-3.0.0.jar > SHA256SUMS.txt
+sha1sum target/hud-packs/*.zip
 ```
 
 PowerShell：
 
 ```powershell
-Get-FileHash .\target\HomingMissiles-2.0.0.jar -Algorithm SHA256
+Get-FileHash .\target\HomingMissiles-3.0.0.jar -Algorithm SHA256
+Get-FileHash .\target\hud-packs\*.zip -Algorithm SHA1
 ```
 
 ## 7. 发布内容
@@ -114,6 +118,7 @@ Get-FileHash .\target\HomingMissiles-2.0.0.jar -Algorithm SHA256
 建议同时发布：
 
 - 插件 JAR；
+- 对应游戏版本的像素 HUD 资源包及其 SHA-1；
 - 快速安装包；
 - 源码包；
 - SHA-256；

@@ -3,6 +3,8 @@ package cn.yjj.homingmissiles.service;
 import cn.yjj.homingmissiles.config.PluginSettings;
 import cn.yjj.homingmissiles.config.SettingsManager;
 import cn.yjj.homingmissiles.util.HudFormat;
+import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Sound;
@@ -10,6 +12,7 @@ import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerResourcePackStatusEvent;
 import org.bukkit.util.Vector;
 
 import java.util.HashMap;
@@ -20,11 +23,15 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Aggregates guidance state into native client HUD widgets and spatial warning audio.
- * Shooter telemetry intentionally contains only occupied outbound channels: never a
- * target identity, bearing, range, speed, or target count.
+ * Aggregates guidance state into a resource-pack-backed pixel HMD. The ActionBar
+ * carries one private-use glyph whose pixels come from homingmissiles:hud; it is
+ * not a textual telemetry line. BossBars are used only when the pack is not ready.
+ * Shooter symbology exposes channel occupancy only, never target telemetry.
  */
 public final class LockHudService {
+    public static final UUID HUD_PACK_ID = UUID.fromString("4b388bf5-7ba1-4d5e-97e8-fb1f38d3a300");
+    private static final Key HUD_FONT = Key.key("homingmissiles", "hud");
+
     private final SettingsManager settingsManager;
 
     private long serviceTick;
@@ -33,6 +40,8 @@ public final class LockHudService {
     private final Map<UUID, Long> nextWarningTick = new HashMap<>();
     private final Map<UUID, BossBar> shooterBars = new HashMap<>();
     private final Map<UUID, BossBar> targetBars = new HashMap<>();
+    private final Map<UUID, Player> overlayPlayers = new HashMap<>();
+    private final Set<UUID> packReady = new HashSet<>();
 
     public LockHudService(SettingsManager settingsManager) {
         this.settingsManager = settingsManager;
@@ -81,34 +90,119 @@ public final class LockHudService {
     public void endTick() {
         PluginSettings settings = settingsManager.current();
         if (!settings.hudEnabled()) {
+            clearOverlays();
             clearBars(shooterBars);
             clearBars(targetBars);
             nextWarningTick.clear();
             return;
         }
 
-        Set<UUID> activeShooters = renderShooterHud(settings);
-        Set<UUID> threatened = renderThreatHudAndAudio(settings);
+        Set<UUID> pixelPlayers = renderPixelOverlays(settings);
+        Set<UUID> activeShooters = renderShooterHud(settings, pixelPlayers);
+        Set<UUID> threatened = renderThreatHudAndAudio(settings, pixelPlayers);
         removeStaleBars(shooterBars, activeShooters);
         removeStaleBars(targetBars, threatened);
-        pruneWarnings(threatened);
+        pruneWarnings(targetThreats.keySet());
+    }
+
+    public void preparePlayer(Player player) {
+        UUID playerId = player.getUniqueId();
+        packReady.remove(playerId);
+        // Always remove the previous plugin-owned pack before applying the new
+        // snapshot, including when reload disables or delegates the HUD pack.
+        player.removeResourcePack(HUD_PACK_ID);
+        PluginSettings settings = settingsManager.current();
+        if (!settings.hudEnabled() || !settings.pixelHudEnabled()) {
+            return;
+        }
+        if (settings.assumeServerPackProvidesHud()) {
+            packReady.add(playerId);
+            return;
+        }
+        String url = settings.hudResourcePackUrl();
+        if (url.isBlank()) {
+            return;
+        }
+
+        byte[] sha1 = decodeSha1(settings.hudResourcePackSha1());
+        player.addResourcePack(
+                HUD_PACK_ID,
+                url,
+                sha1,
+                settings.hudResourcePackPrompt(),
+                settings.hudResourcePackRequired());
+    }
+
+    public void handleResourcePackStatus(PlayerResourcePackStatusEvent event) {
+        PluginSettings settings = settingsManager.current();
+        // In delegated mode there is no reliable plugin-owned pack UUID to
+        // correlate; preparePlayer intentionally trusts the administrator.
+        if (settings.assumeServerPackProvidesHud() || !HUD_PACK_ID.equals(event.getID())) {
+            return;
+        }
+        UUID playerId = event.getPlayer().getUniqueId();
+        if (event.getStatus() == PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED) {
+            packReady.add(playerId);
+        } else if (isTerminalPackFailure(event.getStatus())) {
+            packReady.remove(playerId);
+        }
     }
 
     public void forgetPlayer(UUID playerId) {
         nextWarningTick.remove(playerId);
+        packReady.remove(playerId);
+        overlayPlayers.remove(playerId);
         removeBar(shooterBars, playerId);
         removeBar(targetBars, playerId);
     }
 
     public void shutdown() {
+        clearOverlays();
         clearBars(shooterBars);
         clearBars(targetBars);
         shooterStates.clear();
         targetThreats.clear();
         nextWarningTick.clear();
+        packReady.clear();
     }
 
-    private Set<UUID> renderShooterHud(PluginSettings settings) {
+    private Set<UUID> renderPixelOverlays(PluginSettings settings) {
+        if (!settings.pixelHudEnabled()) {
+            clearOverlays();
+            return Set.of();
+        }
+
+        Set<UUID> active = new HashSet<>();
+        // Incoming-threat symbology has priority when a player is both shooter and target.
+        for (Map.Entry<UUID, TargetThreat> entry : targetThreats.entrySet()) {
+            UUID playerId = entry.getKey();
+            TargetThreat threat = entry.getValue();
+            if (!packReady.contains(playerId) || !threat.target.isOnline()) {
+                continue;
+            }
+            Location eye = threat.target.getEyeLocation();
+            int sector = HudFormat.directionSector(
+                    eye.getYaw(), eye.getX(), eye.getZ(), threat.arrowX, threat.arrowZ);
+            double proximity = HudFormat.proximity(threat.distance, settings.lockRetentionRange());
+            showGlyph(threat.target, HudFormat.threatGlyph(sector, proximity));
+            active.add(playerId);
+        }
+
+        for (Map.Entry<UUID, ShooterState> entry : shooterStates.entrySet()) {
+            UUID playerId = entry.getKey();
+            ShooterState state = entry.getValue();
+            if (active.contains(playerId) || !packReady.contains(playerId) || !state.player.isOnline()) {
+                continue;
+            }
+            showGlyph(state.player, HudFormat.shooterGlyph(state.active));
+            active.add(playerId);
+        }
+
+        removeStaleOverlays(active);
+        return active;
+    }
+
+    private Set<UUID> renderShooterHud(PluginSettings settings, Set<UUID> pixelPlayers) {
         if (!settings.shooterBossBar()) {
             clearBars(shooterBars);
             return Set.of();
@@ -117,7 +211,7 @@ public final class LockHudService {
         Set<UUID> active = new HashSet<>();
         for (Map.Entry<UUID, ShooterState> entry : shooterStates.entrySet()) {
             ShooterState state = entry.getValue();
-            if (!state.player.isOnline()) {
+            if (pixelPlayers.contains(entry.getKey()) || !state.player.isOnline()) {
                 continue;
             }
             active.add(entry.getKey());
@@ -132,22 +226,22 @@ public final class LockHudService {
         return active;
     }
 
-    private Set<UUID> renderThreatHudAndAudio(PluginSettings settings) {
-        Set<UUID> threatened = new HashSet<>();
+    private Set<UUID> renderThreatHudAndAudio(PluginSettings settings, Set<UUID> pixelPlayers) {
+        Set<UUID> threatenedWithBars = new HashSet<>();
         for (Map.Entry<UUID, TargetThreat> entry : targetThreats.entrySet()) {
             TargetThreat threat = entry.getValue();
             Player target = threat.target;
             if (!target.isOnline()) {
                 continue;
             }
-            threatened.add(entry.getKey());
 
-            if (settings.targetBossBar()) {
+            if (settings.targetBossBar() && !pixelPlayers.contains(entry.getKey())) {
+                threatenedWithBars.add(entry.getKey());
                 BossBar bar = targetBars.computeIfAbsent(entry.getKey(), ignored ->
                         Bukkit.createBossBar("", BarColor.RED, BarStyle.SEGMENTED_20));
                 attach(bar, target);
                 bar.setTitle(threat.count > 1 ? "§4⚠  多枚导弹来袭  ×" + threat.count : "§4⚠  导弹来袭");
-                bar.setProgress(HudFormat.proximity(threat.distance, settings.trackingRange()));
+                bar.setProgress(HudFormat.proximity(threat.distance, settings.lockRetentionRange()));
                 bar.setVisible(true);
             }
 
@@ -158,7 +252,7 @@ public final class LockHudService {
         if (!settings.targetBossBar()) {
             clearBars(targetBars);
         }
-        return threatened;
+        return threatenedWithBars;
     }
 
     private void playSpatialWarning(Player target, TargetThreat threat, PluginSettings settings) {
@@ -167,10 +261,10 @@ public final class LockHudService {
             return;
         }
 
-        double proximity = HudFormat.proximity(threat.distance, settings.trackingRange());
+        double proximity = HudFormat.proximity(threat.distance, settings.lockRetentionRange());
         int interval = HudFormat.warningInterval(
                 threat.distance,
-                settings.trackingRange(),
+                settings.lockRetentionRange(),
                 settings.warningMinIntervalTicks(),
                 settings.warningMaxIntervalTicks());
 
@@ -193,6 +287,53 @@ public final class LockHudService {
                     (float) (0.82 + proximity * 0.28));
         }
         nextWarningTick.put(id, serviceTick + interval);
+    }
+
+    private void showGlyph(Player player, char glyph) {
+        player.sendActionBar(Component.text(String.valueOf(glyph)).font(HUD_FONT));
+        overlayPlayers.put(player.getUniqueId(), player);
+    }
+
+    private void removeStaleOverlays(Set<UUID> active) {
+        Iterator<Map.Entry<UUID, Player>> iterator = overlayPlayers.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, Player> entry = iterator.next();
+            if (active.contains(entry.getKey())) {
+                continue;
+            }
+            if (entry.getValue().isOnline()) {
+                entry.getValue().sendActionBar(Component.empty());
+            }
+            iterator.remove();
+        }
+    }
+
+    private void clearOverlays() {
+        for (Player player : overlayPlayers.values()) {
+            if (player.isOnline()) {
+                player.sendActionBar(Component.empty());
+            }
+        }
+        overlayPlayers.clear();
+    }
+
+    private static byte[] decodeSha1(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        byte[] result = new byte[20];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = (byte) Integer.parseInt(value.substring(i * 2, i * 2 + 2), 16);
+        }
+        return result;
+    }
+
+    private static boolean isTerminalPackFailure(PlayerResourcePackStatusEvent.Status status) {
+        return status == PlayerResourcePackStatusEvent.Status.DECLINED
+                || status == PlayerResourcePackStatusEvent.Status.FAILED_DOWNLOAD
+                || status == PlayerResourcePackStatusEvent.Status.INVALID_URL
+                || status == PlayerResourcePackStatusEvent.Status.FAILED_RELOAD
+                || status == PlayerResourcePackStatusEvent.Status.DISCARDED;
     }
 
     private static void attach(BossBar bar, Player player) {

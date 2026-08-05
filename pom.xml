@@ -5,13 +5,14 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>cn.yjj</groupId>
     <artifactId>homing-missiles</artifactId>
-    <version>2.0.0</version>
+    <version>3.0.0</version>
     <name>HomingMissiles</name>
     <description>Professional multi-player, multi-arrow physical homing bow plugin</description>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.build.outputTimestamp>2026-08-06T00:00:00Z</project.build.outputTimestamp>
     </properties>
 
     <repositories>
@@ -31,7 +32,7 @@
     </dependencies>
 
     <build>
-        <finalName>HomingMissiles-2.0.0</finalName>
+        <finalName>HomingMissiles-3.0.0</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -46,10 +47,34 @@
                     <archive>
                         <manifestEntries>
                             <Implementation-Title>HomingMissiles</Implementation-Title>
-                            <Implementation-Version>2.0.0</Implementation-Version>
+                            <Implementation-Version>3.0.0</Implementation-Version>
                         </manifestEntries>
                     </archive>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>build-pixel-hud-resource-packs</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <mkdir dir="${project.build.directory}/hud-packs"/>
+                                <exec executable="${java.home}/bin/java" failonerror="true">
+                                    <arg value="-Djava.awt.headless=true"/>
+                                    <arg value="${project.basedir}/tools/HudPackBuilder.java"/>
+                                    <arg value="${project.build.directory}/hud-packs"/>
+                                </exec>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

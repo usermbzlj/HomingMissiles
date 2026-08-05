@@ -1,6 +1,9 @@
 package cn.yjj.homingmissiles.util;
 
 public final class HudFormat {
+    public static final int SHOOTER_GLYPH_BASE = 0xE100;
+    public static final int THREAT_GLYPH_BASE = 0xE104;
+
     private HudFormat() {
     }
 
@@ -61,6 +64,42 @@ public final class HudFormat {
         // Ease-in keeps distant alerts calm and makes the terminal phase accelerate decisively.
         double urgency = closeness * closeness;
         return (int) Math.round(safeMax - (safeMax - safeMin) * urgency);
+    }
+
+    public static char shooterGlyph(int active) {
+        int state = Math.max(1, Math.min(4, active));
+        return (char) (SHOOTER_GLYPH_BASE + state - 1);
+    }
+
+    /**
+     * Returns one of eight relative sectors. 0 is forward, 2 is left,
+     * 4 is behind and 6 is right, matching the HUD sprite atlas.
+     */
+    public static int directionSector(float viewerYawDegrees,
+                                      double fromX, double fromZ,
+                                      double toX, double toZ) {
+        double dx = toX - fromX;
+        double dz = toZ - fromZ;
+        if (dx * dx + dz * dz < 1.0E-8) {
+            return 0;
+        }
+        double absolute = Math.toDegrees(Math.atan2(-dx, dz));
+        double relative = absolute - viewerYawDegrees;
+        relative = ((relative % 360.0) + 360.0) % 360.0;
+        return Math.floorMod((int) Math.round(relative / 45.0), 8);
+    }
+
+    public static int urgencyBand(double proximity) {
+        double safe = clamp(proximity, 0.0, 1.0);
+        if (safe >= 0.72) {
+            return 2;
+        }
+        return safe >= 0.38 ? 1 : 0;
+    }
+
+    public static char threatGlyph(int directionSector, double proximity) {
+        int sector = Math.floorMod(directionSector, 8);
+        return (char) (THREAT_GLYPH_BASE + urgencyBand(proximity) * 8 + sector);
     }
 
     private static double clamp(double value, double min, double max) {

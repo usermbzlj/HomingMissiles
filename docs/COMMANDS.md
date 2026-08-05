@@ -104,13 +104,17 @@
 可调参数：
 
 - `range`
+- `retention-range`
 - `lifetime`
 - `delay`
 - `turn`
 - `acceleration`
 - `min-speed`
 - `max-speed`
+- `terminal-acceleration`
+- `terminal-max-speed`
 - `lead`
+- `max-lead`
 - `switch-advantage`
 
 ### `/hbow tune reset <参数>`

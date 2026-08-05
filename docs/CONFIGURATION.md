@@ -1,16 +1,21 @@
 # 配置参考
 
-当前配置版本为 `4`。执行 `/hbow reload` 会校验并原子替换内存设置，不会覆盖原文件。
+当前配置版本为 `5`。执行 `/hbow reload` 会校验并原子替换内存设置，不会覆盖原文件。
 
 ## tracking
 
-- `range`：索敌距离。建议 24～96。
+- `range`：首次捕获距离，默认 `80`。导弹只在这个近圈内建立新锁定。
+- `lock-retention-range`：锁定保持距离，默认 `192`，且不能小于 `range`。已锁目标即使飞出捕获圈，仍会在保持圈内被追踪。
 - `max-lifetime-ticks`：飞行寿命。20 tick = 1秒。
 - `activation-delay-ticks`：离弦后延迟索敌，防止立即反折。
 - `turn-rate-degrees-per-tick`：每 tick 最大转向角。越大越灵敏。
-- `acceleration-per-tick`：每 tick 速度变化。
-- `min-speed` / `max-speed`：速度下限和上限。
-- `lead-ticks`：目标位置预判。
+- `acceleration-per-tick`：巡航段每 tick 速度变化。
+- `min-speed` / `max-speed`：巡航速度下限和上限，默认 `1.2` / `3.4` 格/tick。
+- `lead-ticks`：动态截击解的最小预判时间。
+- `max-lead-ticks`：动态截击解的最大预判时间；目标当前速度高于导弹、没有实数截击解时，会向这个上限提前瞄准。
+- `terminal-boost.delay-ticks`：持续锁定达到该时长后点燃后程发动机。
+- `terminal-boost.escape-trigger-ticks`：目标连续拉远达到该时长后提前点火。
+- `terminal-boost.acceleration-per-tick` / `max-speed`：后程加速度与最高速度，默认 `0.075` / `5.6` 格/tick。
 - `dynamic-retargeting`：允许切换到明显更近的目标。
 - `switch-advantage-blocks`：切换目标所需距离优势，防抖。
 - `require-line-of-sight`：要求无遮挡；开启会增加成本。
@@ -74,15 +79,19 @@ item:
 
 ## hud
 
-HUD 使用客户端原生 BossBar 组件，不再用每 tick ActionBar 文字模拟仪表，也不要求玩家安装客户端模组或资源包。
+HUD 的主路径是项目自带资源包中的 `homingmissiles:hud` 位图字体：插件向 ActionBar 发送一个私有字形，客户端用透明 PNG 绘制像素化头戴显示器。它不是由文本字符拼出的假仪表，也不要求安装 Fabric/Forge 客户端模组。资源包没有就绪时才使用 BossBar 降级。
 
 - `enabled`：HUD 与来袭警报总开关。
-- `shooter-bossbar`：蓝色四联数据链占用表；只显示在途数量。
-- `target-bossbar`：红色 20 段威胁表；导弹接近时填充，被多枚追踪时显示数量。
+- `pixel-overlay`：资源包就绪时启用像素 HMD。
+- `shooter-bossbar` / `target-bossbar`：资源包未加载时是否显示降级仪表。
+- `resource-pack.url`：玩家客户端可直接访问的 HUD ZIP HTTP(S) 地址。
+- `resource-pack.sha1`：对应 ZIP 的 40 位 SHA-1，用于完整性校验和客户端缓存。
+- `resource-pack.required` / `prompt`：是否强制加载以及确认提示。
+- `resource-pack.assume-server-pack-provides-hud`：若已经把 `assets/homingmissiles` 合并进全服资源包，则设为 `true`，插件不再单独发送 ZIP。
 - `warning-audio`：从最接近导弹方向播放空间化幽匿/心跳组合音。
 - `warning-min-interval-ticks` / `warning-max-interval-ticks`：终端阶段与远距阶段的警报间隔。
 
-被追踪者可以获得生存所需的模糊威胁强度和空间方向；发射者不会获得任何具体目标遥测。
+射手只得到青色准星和 4 个挂点占用；目标身份、距离、方向、速度以及精确锁定参数都不会发给射手。被追踪者得到八个离散方向和远/中/近三级威胁图形。完整部署见 [HUD_RESOURCE_PACK.md](HUD_RESOURCE_PACK.md)。
 
 ## worlds
 
@@ -121,10 +130,14 @@ visual:
 
 ```yaml
 turn-rate-degrees-per-tick: 8.0
-acceleration-per-tick: 0.015
-min-speed: 1.0
-max-speed: 2.8
+acceleration-per-tick: 0.025
+min-speed: 1.2
+max-speed: 3.4
+terminal-boost:
+  acceleration-per-tick: 0.075
+  max-speed: 5.6
 lead-ticks: 4.0
+max-lead-ticks: 24.0
 ```
 
 ### agile
@@ -132,17 +145,25 @@ lead-ticks: 4.0
 ```yaml
 turn-rate-degrees-per-tick: 14.0
 acceleration-per-tick: 0.025
-min-speed: 1.1
-max-speed: 3.2
+min-speed: 1.3
+max-speed: 3.8
+terminal-boost:
+  acceleration-per-tick: 0.1
+  max-speed: 6.2
 lead-ticks: 5.0
+max-lead-ticks: 28.0
 ```
 
 ### realistic
 
 ```yaml
 turn-rate-degrees-per-tick: 4.5
-acceleration-per-tick: 0.008
-min-speed: 0.9
-max-speed: 2.4
+acceleration-per-tick: 0.018
+min-speed: 1.0
+max-speed: 3.0
+terminal-boost:
+  acceleration-per-tick: 0.06
+  max-speed: 5.0
 lead-ticks: 6.0
+max-lead-ticks: 30.0
 ```

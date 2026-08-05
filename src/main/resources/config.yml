@@ -1,16 +1,20 @@
-# HomingMissiles 2.0.0
+# HomingMissiles 3.0.0
 # Paper/Purpur 1.21.x，Java 21。
 # 速度单位为“方块/tick”；正常服务器每秒20 tick。
 # 修改后可执行 /hbow reload。在线调参可使用 /hbow tune。
 
-config-version: 4
+config-version: 5
 
 tracking:
-  # 箭从当前位置搜索玩家目标的最大距离。
-  range: 48.0
+  # 首次捕获只在近圈发生，避免导弹凭空误锁非常远的新目标。
+  range: 80.0
 
-  # 最大飞行寿命。120 tick = 6秒。
-  max-lifetime-ticks: 120
+  # 一旦建立锁定，当前目标可在更大的保持圈内继续被追踪。
+  # 该值必须不小于 range；默认是首次捕获距离的 2.4 倍。
+  lock-retention-range: 192.0
+
+  # 最大飞行寿命。300 tick = 15秒，为远距拦截和二次追赶留出时间。
+  max-lifetime-ticks: 300
 
   # 发射后延迟多久开始索敌，避免刚离弦便急转。
   activation-delay-ticks: 4
@@ -18,14 +22,24 @@ tracking:
   # 每tick允许改变的最大飞行角度。
   turn-rate-degrees-per-tick: 8.0
 
-  # 每tick增加的速度。可设为轻微负值形成减速，但不能低于 min-speed。
-  acceleration-per-tick: 0.015
+  # 巡航段每tick增加的速度。可设为轻微负值，但不能低于 min-speed。
+  acceleration-per-tick: 0.025
 
-  min-speed: 1.0
-  max-speed: 2.8
+  min-speed: 1.2
+  max-speed: 3.4
+
+  # 后程发动机一旦点火就不会关闭。达到锁定时长，或者目标连续拉远时都会触发。
+  terminal-boost:
+    delay-ticks: 45
+    escape-trigger-ticks: 6
+    acceleration-per-tick: 0.075
+    max-speed: 5.6
 
   # 按目标当前速度预判若干tick后的位置。0表示不预判。
   lead-ticks: 4.0
+
+  # 动态截击解允许的最大预判时间；无可行截击解时向该上限提前瞄准。
+  max-lead-ticks: 24.0
 
   # true：允许飞行中切换到明显更近的目标。
   dynamic-retargeting: true
@@ -84,17 +98,29 @@ audio:
 # 可选值：actionbar / chat / off
 # 高频战斗反馈默认走Action Bar，避免刷屏。
 feedback:
-  launch: actionbar
-  lock-shooter: actionbar
-  lock-target: actionbar
+  # 正常战斗态由像素 HMD 表达，不再用文字占用 ActionBar。
+  launch: off
+  lock-shooter: off
+  lock-target: off
   rejection: actionbar
 
-# 飞行仪表风格原生 HUD / 空间化来袭警报（不改变索敌与制导物理）。
-# HUD 使用真正的 BossBar 组件，不再用 ActionBar 文字冒充仪表。
+# 飞机头戴显示器风格的像素 HUD / 空间化来袭警报。
+# pixel-overlay 需要本项目生成的 HUD 资源包；加载成功后 ActionBar 只承载一枚图形字形，
+# 画面内容来自 PNG 像素纹理而不是文字。BossBar 仅在资源包未就绪时降级使用。
 hud:
   enabled: true
+  pixel-overlay: true
   shooter-bossbar: true
   target-bossbar: true
+  resource-pack:
+    # 必须是客户端能够公开访问的 HTTP/HTTPS 地址。留空时不主动发送资源包。
+    url: ''
+    # 填写对应 HUD ZIP 的 SHA-1（不是插件 JAR 的 SHA-256）。
+    sha1: ''
+    required: false
+    prompt: '&b启用像素化导弹头显'
+    # 若你已把 homingmissiles:hud 合并进 server.properties 的全服资源包，可设为 true。
+    assume-server-pack-provides-hud: false
   warning-audio: true
   # 来袭声从导弹方向空间化播放，距离越近节奏越紧；单位 tick（20 tick = 1秒）。
   warning-min-interval-ticks: 4

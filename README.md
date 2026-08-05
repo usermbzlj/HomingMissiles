@@ -1,10 +1,10 @@
-# HomingMissiles 2.0.0
+# HomingMissiles 3.0.0
 
 面向 **Paper / Purpur / Leaf 1.21.x** 的高伤害连续物理制导弓插件。插件逐 tick 修改箭的真实速度向量，不传送箭实体，因此保留惯性、转弯半径、原版碰撞与伤害流程。每名玩家最多同时维持 4 枚在途导弹。
 
-锁定反馈改为原生 BossBar 仪表：射手只看到四联数据链占用，目标名、距离、方向和速度均不下发；被追踪者看到分段威胁条，并从导弹方向听到随距离收紧的分层空间音。推进器尾焰、白烟弹道、锁定闪光、冲击波和命中烟火构成完整的导弹特效链，不再使用音符盒蜂鸣或目标头顶电火花。
+锁定后导弹进入独立的 192 格保持圈，以动态截击解持续预判目标；达到时限或发现目标连续拉远后，不可逆地点燃后程发动机，把最高速度提升到 5.6 格/tick。HUD 使用资源包 PNG 绘制真正的像素风头戴显示器：射手只看到准星和四个数据链挂点，目标名、距离、方向和速度均不下发；被追踪者看到离散方向与三级威胁图形，并从导弹方向听到随距离收紧的空间警报。
 
-> 当前发布线：`2.0.0`（体验大修，`config-version: 4`）
+> 当前发布线：`3.0.0`（远距截击 / 像素 HMD，`config-version: 5`）
 > 编译 API：Paper API `1.21.4-R0.1-SNAPSHOT`  
 > Java：21  
 > 源码仓库：https://github.com/usermbzlj/HomingMissiles  
@@ -29,18 +29,31 @@
 
 ## 给服务器管理员：快速安装
 
-1. 完全停止服务器。
-2. 删除旧版 `HomingMissiles-1.0.0.jar`，并停用此前的制导箭命令方块。
-3. 将 `HomingMissiles-2.0.0.jar` 放入目标服务器的 `plugins/`。
-4. 完整启动服务器，不要使用 Minecraft 的 `/reload` 代替重启。
-5. 在日志中确认：
+生产服推荐把插件和替换脚本上传到服务器；像素 HMD 资源包还需放到玩家能够访问的 HTTP(S) 地址：
 
-```text
-[HomingMissiles] Enabling HomingMissiles v2.0.0
-[HomingMissiles] HomingMissiles 2.0.0 已启用
+- `target/HomingMissiles-3.0.0.jar`
+- `tools/replace-homingmissiles-3.0.0.sh`
+- `target/hud-packs/HomingMissiles-HUD-1.21.11.zip`（Leaf 1.21.11）
+
+在你的 R4700G3 上，上传位置和服务器位置已经预设，因此 root 可以直接执行：
+
+```bash
+bash /home/pell/replace-homingmissiles-3.0.0.sh
 ```
 
-6. 进入游戏执行：
+脚本默认读取 `/home/pell/HomingMissiles-3.0.0.jar`，目标服务器为 `/home/NextGeneration/McThuner`，并按 `WorkingDirectory` 精确匹配唯一的 systemd 服务。其他服务器仍可通过 `--jar`、`--server-dir` 和 `--service` 覆盖默认值。脚本会固定校验 JAR 的 SHA-256
+`26a477b0e1087f4d95a503a27ae99f9a4284d2fb44fa76739d9db8e69fe90906`，自动停服、备份旧 JAR、原子替换、重启并验证插件启用；任一步失败都会尝试恢复旧 JAR 和原服务状态。现有 `plugins/HomingMissiles/config.yml` 不会被覆盖。
+
+如果不使用脚本，必须手工完成：完全停服、移走所有旧版 HomingMissiles JAR、放入 3.0.0 JAR、完整启动。不要使用 Minecraft 的 `/reload` 代替重启，也不要在 `plugins/` 中同时保留多个版本。
+
+在日志中确认：
+
+```text
+[HomingMissiles] Enabling HomingMissiles v3.0.0
+[HomingMissiles] HomingMissiles 3.0.0 已启用
+```
+
+进入游戏执行：
 
 ```text
 /hbow version
@@ -112,10 +125,13 @@ mvn -U clean package
 成功后发布产物位于：
 
 ```text
-target/HomingMissiles-2.0.0.jar
+target/HomingMissiles-3.0.0.jar
+target/hud-packs/HomingMissiles-HUD-1.21.4.zip
+target/hud-packs/HomingMissiles-HUD-1.21.11.zip
+target/hud-packs/HomingMissiles-HUD-preview.png
 ```
 
-`target/original-*.jar`、`build/classes/`、`build/stubs/` 都不是正式服务器插件产物。服务器中只应安装 `target/HomingMissiles-2.0.0.jar`。
+`target/original-*.jar`、`build/classes/`、`build/stubs/` 都不是正式服务器插件产物。服务器中只应安装 `target/HomingMissiles-3.0.0.jar`。
 
 跳过测试仅用于临时排查，不应作为发布流程：
 
@@ -182,7 +198,7 @@ mvn -U clean package
 - 解析真实 Paper API；
 - 编译主代码；
 - 复制 `plugin.yml` 与 `config.yml`；
-- 生成可安装 JAR。
+- 生成可安装 JAR，以及两个版本的像素 HUD 资源包和预览图。
 
 ### B. 无网络严格验证
 
@@ -205,7 +221,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 - 运行向量边界测试；
 - 运行命令纠错与 Tab 前缀测试；
 - 运行配置格式工具测试；
-- 运行 HUD 四联通道、威胁强度和警报节奏测试。
+- 运行动态截击/后程点火以及 HUD 字形、方向分区、威胁等级和警报节奏测试。
 
 离线 API 桩只用于编译和纯逻辑测试，**不能证明真实 Paper 运行兼容性，也不会被打入发布 JAR**。
 
@@ -222,12 +238,14 @@ powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 7. 目标死亡、离线、跨世界、进入被排除模式后能够解除或重选。
 8. 箭正常撞墙、命中、自毁，不发生瞬移。
 9. 达到个人/全服上限和冷却时反馈准确。
-10. 发射后射手出现蓝色四联数据链 BossBar，但看不到目标遥测；被锁玩家出现红色分段威胁 BossBar，并从导弹方向听到逐步加急的空间警报；箭结束后两端面板与警报都消失。
+10. 接受资源包后，射手出现青色像素准星和四个挂点，但看不到目标遥测；被锁玩家出现像素化方向/威胁符号，并从导弹方向听到逐步加急的空间警报；箭结束后图形与警报都消失。
 11. 第五枚导弹必定被拒绝，即使射手拥有 `homingmissiles.bypass.limits`；默认命中伤害不低于 12。
 12. 新发放的弓默认带火矢、无限、耐久 III、不可损坏与力量 V；关闭任一 `item.enchantments.*` 后重新发放可验证对应变化。
-13. `/hbow reload` 面对非法配置时保留可用设置并给出警告。
-14. 区块卸载、重新加载和服务器重启行为符合 `lifecycle` 配置。
-15. `/hbow status verbose` 的平均调度耗时没有持续异常增长。
+13. 目标先进入 80 格捕获圈，锁定后离开捕获圈仍能在 192 格保持圈内被追踪；连续拉远会触发不可逆的后程加速。
+14. 资源包拒绝/失败时正确降级为 BossBar；重新接受并加载后恢复像素 HMD。
+15. `/hbow reload` 面对非法配置时保留可用设置并给出警告。
+16. 区块卸载、重新加载和服务器重启行为符合 `lifecycle` 配置。
+17. `/hbow status verbose` 的平均调度耗时没有持续异常增长。
 
 ---
 
@@ -249,14 +267,14 @@ dev-server/
 
 ```bash
 mvn clean package
-cp target/HomingMissiles-2.0.0.jar /path/to/dev-server/plugins/
+cp target/HomingMissiles-3.0.0.jar /path/to/dev-server/plugins/
 ```
 
 Windows PowerShell：
 
 ```powershell
 mvn clean package
-Copy-Item .\target\HomingMissiles-2.0.0.jar C:\path\to\dev-server\plugins\ -Force
+Copy-Item .\target\HomingMissiles-3.0.0.jar C:\path\to\dev-server\plugins\ -Force
 ```
 
 然后完整启动测试服。开发中不要依赖 `/reload`：
@@ -310,6 +328,7 @@ HomingMissilesPlugin/
 │  │  └─ LockHudService.java
 │  └─ util/
 │     ├─ CommandUtil.java
+│     ├─ GuidanceMath.java
 │     ├─ HudFormat.java
 │     ├─ MessageService.java
 │     └─ VectorMath.java
@@ -322,11 +341,15 @@ HomingMissilesPlugin/
 │  └─ src/main/java/org/bukkit/
 ├─ tools/
 │  ├─ verify-offline.sh
-│  └─ verify-offline.ps1
+│  ├─ verify-offline.ps1
+│  ├─ HudPackBuilder.java
+│  ├─ test-replacement-script.sh
+│  └─ replace-homingmissiles-3.0.0.sh
 └─ docs/
    ├─ INSTALL.md
    ├─ COMMANDS.md
    ├─ CONFIGURATION.md
+   ├─ HUD_RESOURCE_PACK.md
    ├─ DEVELOPMENT.md
    ├─ ARCHITECTURE.md
    └─ RELEASING.md
@@ -342,11 +365,12 @@ HomingMissilesPlugin/
 | `HomingBowFactory` | 创建和识别带 PDC 身份的制导弓 |
 | `HomingListener` | 连接 Bukkit 事件与领域服务 |
 | `HomingService` | 箭状态、目标选择、每 tick 制导、持久化恢复、限制和诊断 |
-| `LockHudService` | 聚合出站/来袭关系，维护原生 BossBar，并播放空间化分层警报 |
-| `TrackedArrow` | 单支在途箭的最小可变状态 |
+| `LockHudService` | 发送/跟踪 HUD 资源包，绘制像素 HMD，维护降级 BossBar，并播放空间化警报 |
+| `TrackedArrow` | 单支在途箭的目标观测、拉远计数和后程点火状态 |
 | `HomingBowCommand` | 命令路由、权限、帮助、参数校验和 Tab 补全 |
 | `MessageService` | 消息模板、占位符、聊天与 Action Bar 输出 |
-| `HudFormat` | 四联通道、威胁强度与警报节奏的纯逻辑格式化 |
+| `GuidanceMath` | 动态截击时间解与后程发动机点火判定 |
+| `HudFormat` | 私有字形、八方向、三级威胁与警报节奏的纯逻辑映射 |
 | `VectorMath` | 有限角速度转向与数值边界保护 |
 | `CommandUtil` | 前缀过滤、编辑距离和命令建议 |
 
@@ -389,11 +413,13 @@ Bukkit 主线程调度
   → 单箭 try/catch 隔离
   → 校验实体、世界和寿命
   → 选择或复用目标
-  → 计算目标预判位置
+  → 首次捕获圈 / 锁后保持圈验证
+  → 动态截击时间解与目标预判位置
+  → 需要时不可逆地点燃后程发动机
   → VectorMath.rotateTowards
   → 限制速度并写回 velocity
   → 首锁提示（一次性）+ reportLock
-  → LockHudService.endTick（BossBar 仪表 / 空间化来袭音）
+  → LockHudService.endTick（像素 HMD / 降级 BossBar / 空间化来袭音）
 ```
 
 ### 命中与生命周期
@@ -524,12 +550,13 @@ VectorMath.rotateTowards
 ## 配置、命令与权限
 
 - 完整命令：[`docs/COMMANDS.md`](docs/COMMANDS.md)
-- 完整配置：[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)（含附魔、伤害、特效、`hud.*` 与 `config-version: 4`）
+- 完整配置：[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)（含远距保持、后程加速、附魔、特效、`hud.*` 与 `config-version: 5`）
+- 像素 HUD 部署：[`docs/HUD_RESOURCE_PACK.md`](docs/HUD_RESOURCE_PACK.md)
 - 安装和排错：[`docs/INSTALL.md`](docs/INSTALL.md)
 - 开发工作流：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
 - 变更记录：[`CHANGELOG.md`](CHANGELOG.md)
 
-升级到体验大修构建后，旧配置若仍为 `config-version: 2/3`，缺失的新字段会使用安全默认值并在重载时给出版本警告；旧的 ActionBar HUD、蜂鸣和目标标记字段不再生效。建议对照仓库内最新 `config.yml` 补齐。附魔设置只影响之后新发放的弓，已有物品不会被静默改写。
+升级后，旧配置若仍为 `config-version: 2/3/4`，缺失字段会使用 5 版安全默认值并在重载时给出版本警告；文件不会被自动覆盖。要启用像素 HMD，必须补齐 `hud.resource-pack.url` 与 `sha1`，或把资源合并进全服资源包后启用 `assume-server-pack-provides-hud`。附魔设置只影响之后新发放的弓。
 
 常用命令：
 
@@ -557,8 +584,9 @@ VectorMath.rotateTowards
 ```bash
 bash tools/verify-offline.sh
 mvn -U clean package
-jar tf target/HomingMissiles-2.0.0.jar
-sha256sum target/HomingMissiles-2.0.0.jar
+jar tf target/HomingMissiles-3.0.0.jar
+sha256sum target/HomingMissiles-3.0.0.jar
+sha1sum target/hud-packs/*.zip
 ```
 
 版本号至少需要同步检查：

@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0+combat-hud-vfx — 2026-08-06
+## 3.0.0 — 2026-08-06
 
 ### Combat model
 
@@ -10,17 +10,30 @@
 
 ### Native HUD and telemetry privacy
 
-- Replaced continuous ActionBar text with native segmented BossBars.
-- Shooter HUD exposes only four outbound channel slots; target identity, distance, direction and speed remain private.
-- Target HUD exposes only threat count and an intentionally imprecise proximity gauge.
+- Added deterministic 1.21.4 and 1.21.11 bitmap-font resource packs for a real pixel-art helmet-mounted display; the ActionBar carries one private glyph instead of a textual imitation.
+- Shooter HMD exposes only a reticle and four outbound hardpoints; target identity, distance, direction and speed remain private.
+- Target HMD exposes eight coarse directions and three urgency bands. BossBars remain only as an unavailable/declined-pack fallback.
 - `/hbow inspect` self-service no longer leaks target telemetry.
+
+### Long-range interceptor guidance
+
+- Split initial acquisition (`80` blocks) from post-lock retention (`192` blocks), preventing distant accidental captures while preserving a real long-range lock.
+- Added analytical intercept-time prediction with bounded fallback lead when an Elytra target temporarily outruns the missile.
+- Added an irreversible terminal motor: it ignites after sustained lock or repeated range opening, with independently configurable acceleration and maximum speed.
 
 ### Effects and audio
 
 - Rebuilt launch, powered-flight, lock, impact and self-destruct effects around an exhaust flame, white-smoke wake, lock flash, shockwave and layered blast.
 - Removed target-head marker particles.
 - Replaced note-block beeps with layered firework/crossbow/beacon/sculk/warden cues and spatialized the recurring warning toward the nearest threat.
-- Bumped configuration to version 4.
+- Bumped configuration to version 5.
+
+### Release engineering
+
+- Promoted the plugin release version to 3.0.0 and enabled timestamp-stable Maven JAR output.
+- Added a root-oriented Linux replacement tool with a pinned release hash, duplicate detection, config preservation, atomic installation, startup verification and automatic JAR rollback.
+- Added an auditable `SHA256SUMS.txt` for the release artifact.
+- Maven packaging now builds both HUD resource-pack variants and a visual preview without external image tooling.
 
 ## 2.0.0+hud — 2026-08-06
 

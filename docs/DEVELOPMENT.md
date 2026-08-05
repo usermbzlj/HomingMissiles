@@ -35,7 +35,7 @@ mvn -version
 ```bash
 bash tools/verify-offline.sh
 mvn clean package
-cp target/HomingMissiles-2.0.0.jar /path/to/dev-server/plugins/
+cp target/HomingMissiles-3.0.0.jar /path/to/dev-server/plugins/
 ```
 
 Windows：
@@ -43,8 +43,12 @@ Windows：
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 mvn clean package
-Copy-Item .\target\HomingMissiles-2.0.0.jar C:\path\to\dev-server\plugins\ -Force
+Copy-Item .\target\HomingMissiles-3.0.0.jar C:\path\to\dev-server\plugins\ -Force
 ```
+
+Maven 的 `package` 阶段还会以无界面 Java AWT 执行 `tools/HudPackBuilder.java`，在 `target/hud-packs/` 生成 1.21.4/1.21.11 两个确定性资源包、SHA-1 旁车文件和预览 PNG。字体或纹理改动必须同时检查 ZIP 内容、哈希和预览图。
+
+修改 Linux 替换脚本后，在 WSL/Linux 执行 `bash tools/test-replacement-script.sh`。测试在 `/tmp` 创建隔离的伪服务器，并覆盖首次安装、重复运行、配置保留和注入故障后的精确回滚。
 
 ## 3. IDE 导入
 
@@ -128,13 +132,13 @@ clearWhere
 当前基本模型：
 
 1. 读取箭当前速度。
-2. 根据目标速度估算未来位置。
-3. 计算期望方向。
-4. 使用有限最大角速度旋转当前方向。
-5. 按加速度更新速度大小。
-6. 夹紧到最小/最大速度。
-7. 检查向量有限性。
-8. 写回箭速度。
+2. 用相对位置、目标速度和当前导弹速度求截击时间，并夹紧在最小/最大预判范围。
+3. 无正实数解时按最大提前量追赶，而不是退化为尾追目标当前位置。
+4. 根据锁定时间和连续拉远计数决定是否不可逆地点燃后程发动机。
+5. 计算期望方向并使用有限最大角速度旋转当前方向。
+6. 按当前推进段的加速度更新速度大小。
+7. 夹紧到当前推进段的最小/最大速度。
+8. 检查向量有限性并写回箭速度。
 
 保持“方向”和“速度大小”两个概念分离，避免简单线性叠加造成无上限加速或近距离振荡。
 
@@ -148,7 +152,7 @@ clearWhere
 
 高成本选项：
 
-- 大索敌半径；
+- 大首次捕获圈或锁后保持圈；
 - 高全服箭数；
 - 视线检测；
 - 每 tick 粒子；

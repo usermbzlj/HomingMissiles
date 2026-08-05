@@ -4,6 +4,8 @@ import org.bukkit.Location;
 import org.bukkit.Sound;
 import org.bukkit.command.CommandSender;
 import org.bukkit.inventory.PlayerInventory;
+import net.kyori.adventure.text.Component;
+import java.util.UUID;
 public interface Player extends LivingEntity, CommandSender {
  boolean isOnline();
  GameMode getGameMode();
@@ -12,5 +14,8 @@ public interface Player extends LivingEntity, CommandSender {
  String getName();
  void playSound(Location location, Sound sound, float volume, float pitch);
  void sendActionBar(String message);
+ void sendActionBar(Component message);
+ void addResourcePack(UUID id, String url, byte[] hash, String prompt, boolean force);
+ void removeResourcePack(UUID id);
  boolean canSee(Player player);
 }

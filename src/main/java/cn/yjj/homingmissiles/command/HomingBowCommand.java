@@ -206,9 +206,11 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
             messages.sendRaw(sender, "&7你的在途箭：&f" + homingService.activeCount(player.getUniqueId())
                     + "&7/&f" + s.maxTrackedPerPlayer());
         }
-        messages.sendRaw(sender, "&7索敌：&f" + SettingsManager.compact(s.trackingRange()) + "格"
+        messages.sendRaw(sender, "&7捕获/保持：&f" + SettingsManager.compact(s.trackingRange())
+                + "/" + SettingsManager.compact(s.lockRetentionRange()) + "格"
                 + " &8· &7转角：&f" + SettingsManager.compact(s.turnRateDegreesPerTick()) + "°/tick"
-                + " &8· &7速度：&f" + SettingsManager.compact(s.minSpeed()) + "～" + SettingsManager.compact(s.maxSpeed()));
+                + " &8· &7巡航/后程极速：&f" + SettingsManager.compact(s.maxSpeed())
+                + "/" + SettingsManager.compact(s.terminalMaxSpeed()));
 
         if (verbose) {
             messages.sendRaw(sender, "&7调度耗时：&f平均 " + String.format(Locale.ROOT, "%.3f", status.averageTickMillis())
@@ -437,6 +439,7 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
             return true;
         }
         SettingsManager.LoadReport report = settingsManager.reload();
+        homingService.refreshHudResources();
         messages.send(sender, "reload", "warnings", report.warnings().size());
         sendWarnings(sender, report.warnings());
         return true;
