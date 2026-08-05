@@ -44,6 +44,20 @@ worlds:
 - `chat`：发送聊天消息。
 - `off`：关闭该类文字反馈。
 
+首锁仍走 `feedback.lock-shooter` / `feedback.lock-target`（一次性提示）。持续 HUD 见下方 `hud`。
+
+## hud
+
+皇牌空战风格的持续锁定反馈（不改变索敌与制导物理）：
+
+- `enabled`：总开关。关闭后清除残留 ActionBar。
+- `shooter-actionbar`：射手持续 `TRACK` ActionBar（目标、距离、方位）。
+- `target-actionbar`：被锁玩家持续 `MISSILE` ActionBar（距离、来袭方位、射手）。
+- `warning-beep`：被锁持续蜂鸣；距离越近间隔越短。
+- `beep-min-interval-ticks` / `beep-max-interval-ticks`：蜂鸣间隔上下限（tick）。
+
+消息键：`messages.hud-shooter`、`messages.hud-target`（占位符 `{target}` `{distance}` `{dir}` `{shooter}`）。
+
 ## lifecycle
 
 - `remove-arrows-on-disable: true`：插件关闭时删除在途箭，最稳妥。

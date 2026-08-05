@@ -56,7 +56,7 @@ $TestClasspath = "$Stubs;$Classes"
 Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $TestClasspath -d $Tests "@$TestArgs" } "compile tests"
 
 $RuntimeClasspath = "$Stubs;$Classes;$Tests"
-foreach ($Test in @("VectorMathTest", "CommandUtilTest", "SettingsUtilityTest")) {
+foreach ($Test in @("VectorMathTest", "CommandUtilTest", "SettingsUtilityTest", "HudFormatTest")) {
     Invoke-Checked { java -cp $RuntimeClasspath "cn.yjj.homingmissiles.$Test" } "run $Test"
 }
 

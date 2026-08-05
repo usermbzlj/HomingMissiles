@@ -36,6 +36,7 @@ public final class HomingService {
     private final HomingMissilesPlugin plugin;
     private final SettingsManager settingsManager;
     private final MessageService messages;
+    private final LockHudService lockHud;
     private final Map<UUID, TrackedArrow> tracked = new LinkedHashMap<>();
     private final Map<UUID, Integer> shooterCounts = new HashMap<>();
     private final Map<UUID, Long> lastLaunchTick = new HashMap<>();
@@ -54,10 +55,12 @@ public final class HomingService {
     private double averageTickMillis;
     private double peakTickMillis;
 
-    public HomingService(HomingMissilesPlugin plugin, SettingsManager settingsManager, MessageService messages) {
+    public HomingService(HomingMissilesPlugin plugin, SettingsManager settingsManager,
+                         MessageService messages, LockHudService lockHud) {
         this.plugin = plugin;
         this.settingsManager = settingsManager;
         this.messages = messages;
+        this.lockHud = lockHud;
         this.projectileKey = new NamespacedKey(plugin, "homing_projectile");
         this.shooterKey = new NamespacedKey(plugin, "shooter_uuid");
         this.ageKey = new NamespacedKey(plugin, "age_ticks");
@@ -296,6 +299,7 @@ public final class HomingService {
         long started = System.nanoTime();
         serviceTick++;
         int processed = 0;
+        lockHud.beginTick(serviceTick);
 
         Iterator<Map.Entry<UUID, TrackedArrow>> iterator = tracked.entrySet().iterator();
         while (iterator.hasNext()) {
@@ -322,6 +326,7 @@ public final class HomingService {
             }
         }
 
+        lockHud.endTick();
         processedLastTick = processed;
         double elapsedMillis = (System.nanoTime() - started) / 1_000_000.0;
         totalTicks++;
@@ -370,6 +375,11 @@ public final class HomingService {
         notifyLockIfNeeded(state, target);
         steerArrow(arrow, target);
         spawnTrackingEffects(arrow, target, state);
+
+        Location arrowLocation = arrow.getLocation();
+        double distance = arrowLocation.distance(target.getEyeLocation());
+        Player shooter = plugin.getServer().getPlayer(state.shooterId());
+        lockHud.reportLock(shooter, target, arrowLocation, distance);
         return true;
     }
 

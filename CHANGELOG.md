@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0+hud — 2026-08-06
+
+### Combat feedback
+
+- Added Ace Combat–style continuous lock HUD (`config-version: 3`).
+- Shooter ActionBar: `TRACK` with target, distance, cardinal direction.
+- Locked target ActionBar: `MISSILE` warning with distance, direction, shooter.
+- Continuous target warning beep; interval shortens as the missile closes in.
+- New `hud.*` settings and `messages.hud-shooter` / `messages.hud-target`.
+- Guidance, targeting, and launch flow unchanged.
+
 ## 2.0.0 Documentation Revision — 2026-08-06
 
 ### Developer handoff

@@ -19,10 +19,12 @@ HomingMissilesPlugin
 ├─ SettingsManager ──> PluginSettings
 ├─ MessageService
 ├─ HomingBowFactory
-├─ HomingService ──> TrackedArrow / VectorMath
+├─ HomingService ──> TrackedArrow / VectorMath / LockHudService
 ├─ HomingListener ──> HomingService
 └─ HomingBowCommand ──> SettingsManager / HomingService / HomingBowFactory
 ```
+
+`LockHudService` 在每个制导 tick 聚合锁定关系，向射手/目标刷 ActionBar，并向被锁目标播放距离相关的持续蜂鸣。不参与索敌与转向。
 
 `HomingMissilesPlugin` 是组合根。其他组件不应通过静态全局单例重新定位服务。
 

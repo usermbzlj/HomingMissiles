@@ -3,7 +3,7 @@
 # 速度单位为“方块/tick”；正常服务器每秒20 tick。
 # 修改后可执行 /hbow reload。在线调参可使用 /hbow tune。
 
-config-version: 2
+config-version: 3
 
 tracking:
   # 箭从当前位置搜索玩家目标的最大距离。
@@ -87,6 +87,16 @@ feedback:
   lock-target: actionbar
   rejection: actionbar
 
+# AC7 风格持续 HUD / 被锁警报（不改变索敌与制导物理）。
+hud:
+  enabled: true
+  shooter-actionbar: true
+  target-actionbar: true
+  warning-beep: true
+  # 距离越近间隔越短；单位 tick（20 tick = 1秒）。
+  beep-min-interval-ticks: 2
+  beep-max-interval-ticks: 20
+
 effects:
   impact: true
   self-destruct: true
@@ -129,6 +139,8 @@ messages:
   launch: '&a制导箭已发射 &8· &7在途 &f{active}/{limit}'
   lock-shooter: '&c锁定 &f{target} &8· &7距离 &f{distance}格'
   lock-target: '&c警告：你已被 &f{shooter} &c的制导箭锁定'
+  hud-shooter: '&eTRACK &7| &f{target} &7| &f{distance}m &7| {dir}'
+  hud-target: '&c⚠ MISSILE &7| &f{distance}m &7| {dir} &7| &f{shooter}'
   rejected-permission: '&c你没有使用制导弓的权限。'
   rejected-global-limit: '&e全服在途制导箭已达到上限 {limit}。'
   rejected-player-limit: '&e你已有 {active}/{limit} 支制导箭在途。'

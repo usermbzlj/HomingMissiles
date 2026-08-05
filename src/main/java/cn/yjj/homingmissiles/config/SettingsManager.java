@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 public final class SettingsManager {
-    public static final int CONFIG_VERSION = 2;
+    public static final int CONFIG_VERSION = 3;
 
     private static final Map<String, Tunable> TUNABLES;
     private static final Map<String, Preset> PRESETS;
@@ -81,6 +81,12 @@ public final class SettingsManager {
         int particleInterval = boundedInt(c, "visual.particle-interval-ticks", 1, 1, 200, warnings);
         int pageSize = boundedInt(c, "commands.help-page-size", 7, 4, 12, warnings);
         int maxGive = boundedInt(c, "commands.max-give-amount", 64, 1, 2304, warnings);
+        int beepMin = boundedInt(c, "hud.beep-min-interval-ticks", 2, 1, 40, warnings);
+        int beepMax = boundedInt(c, "hud.beep-max-interval-ticks", 20, 1, 100, warnings);
+        if (beepMax < beepMin) {
+            warnings.add("hud.beep-max-interval-ticks 小于 min，已在内存中提升为 " + beepMin);
+            beepMax = beepMin;
+        }
 
         Set<String> disabledWorlds = new LinkedHashSet<>();
         for (String world : c.getStringList("worlds.disabled")) {
@@ -128,6 +134,12 @@ public final class SettingsManager {
                 feedback(c, "feedback.lock-shooter", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 feedback(c, "feedback.lock-target", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 feedback(c, "feedback.rejection", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
+                c.getBoolean("hud.enabled", true),
+                c.getBoolean("hud.shooter-actionbar", true),
+                c.getBoolean("hud.target-actionbar", true),
+                c.getBoolean("hud.warning-beep", true),
+                beepMin,
+                beepMax,
                 color(c.getString("item.name", "&b&l制导弓")),
                 colorList(c.getStringList("item.lore")),
                 Collections.unmodifiableMap(messages),
@@ -286,6 +298,8 @@ public final class SettingsManager {
         m.put("launch", "&a制导箭已发射 &8· &7在途 &f{active}/{limit}");
         m.put("lock-shooter", "&c锁定 &f{target} &8· &7距离 &f{distance}格");
         m.put("lock-target", "&c警告：你已被 &f{shooter} &c的制导箭锁定");
+        m.put("hud-shooter", "&eTRACK &7| &f{target} &7| &f{distance}m &7| {dir}");
+        m.put("hud-target", "&c⚠ MISSILE &7| &f{distance}m &7| {dir} &7| &f{shooter}");
         m.put("rejected-permission", "&c你没有使用制导弓的权限。");
         m.put("rejected-global-limit", "&e全服在途制导箭已达到上限 {limit}。");
         m.put("rejected-player-limit", "&e你已有 {active}/{limit} 支制导箭在途。");

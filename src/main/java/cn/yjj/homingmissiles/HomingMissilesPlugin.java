@@ -5,6 +5,7 @@ import cn.yjj.homingmissiles.config.SettingsManager;
 import cn.yjj.homingmissiles.item.HomingBowFactory;
 import cn.yjj.homingmissiles.listener.HomingListener;
 import cn.yjj.homingmissiles.service.HomingService;
+import cn.yjj.homingmissiles.service.LockHudService;
 import cn.yjj.homingmissiles.util.MessageService;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -27,7 +28,8 @@ public final class HomingMissilesPlugin extends JavaPlugin {
         SettingsManager.LoadReport loadReport = settingsManager.reload();
         messages = new MessageService(settingsManager);
         bowFactory = new HomingBowFactory(this, settingsManager);
-        homingService = new HomingService(this, settingsManager, messages);
+        LockHudService lockHud = new LockHudService(settingsManager, messages);
+        homingService = new HomingService(this, settingsManager, messages, lockHud);
 
         getServer().getPluginManager().registerEvents(
                 new HomingListener(settingsManager, messages, bowFactory, homingService), this);
