@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Build = Join-Path $Root "build"
@@ -8,14 +8,14 @@ $Tests = Join-Path $Build "test"
 
 function Require-Command([string]$Name) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-        throw "缺少命令：$Name。请安装 JDK 21，并确保其 bin 目录位于 PATH。"
+        throw "Missing command: $Name. Install JDK 21 and ensure its bin directory is on PATH."
     }
 }
 
 function Invoke-Checked([scriptblock]$Command, [string]$Step) {
     & $Command
     if ($LASTEXITCODE -ne 0) {
-        throw "$Step 失败，退出码：$LASTEXITCODE"
+        throw "$Step failed with exit code $LASTEXITCODE"
     }
 }
 
@@ -23,7 +23,8 @@ function Write-ArgFile([System.IO.FileInfo[]]$Files, [string]$Path) {
     $Lines = $Files | ForEach-Object {
         '"' + $_.FullName.Replace('\', '\\') + '"'
     }
-    Set-Content -Path $Path -Value $Lines -Encoding UTF8
+    # javac @argfile rejects UTF-8 BOM
+    [System.IO.File]::WriteAllLines($Path, $Lines, [System.Text.UTF8Encoding]::new($false))
 }
 
 Require-Command "java"
@@ -46,17 +47,17 @@ Write-ArgFile $StubSources $StubArgs
 Write-ArgFile $MainSources $MainArgs
 Write-ArgFile $TestSources $TestArgs
 
-Invoke-Checked { javac --release 21 -encoding UTF-8 -d $Stubs "@$StubArgs" } "编译 API 桩"
-Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $Stubs -d $Classes "@$MainArgs" } "编译主代码"
+Invoke-Checked { javac --release 21 -encoding UTF-8 -d $Stubs "@$StubArgs" } "compile stubs"
+Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $Stubs -d $Classes "@$MainArgs" } "compile main"
 
 Copy-Item (Join-Path $Root "src\main\resources\*") $Classes -Force
 
 $TestClasspath = "$Stubs;$Classes"
-Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $TestClasspath -d $Tests "@$TestArgs" } "编译测试"
+Invoke-Checked { javac --release 21 -encoding UTF-8 -Xlint:all -Werror -cp $TestClasspath -d $Tests "@$TestArgs" } "compile tests"
 
 $RuntimeClasspath = "$Stubs;$Classes;$Tests"
 foreach ($Test in @("VectorMathTest", "CommandUtilTest", "SettingsUtilityTest")) {
-    Invoke-Checked { java -cp $RuntimeClasspath "cn.yjj.homingmissiles.$Test" } "运行 $Test"
+    Invoke-Checked { java -cp $RuntimeClasspath "cn.yjj.homingmissiles.$Test" } "run $Test"
 }
 
 Write-Host "Offline verification: PASS" -ForegroundColor Green
