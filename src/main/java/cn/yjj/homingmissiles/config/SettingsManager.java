@@ -13,7 +13,8 @@ import java.util.Map;
 import java.util.Set;
 
 public final class SettingsManager {
-    public static final int CONFIG_VERSION = 3;
+    public static final int CONFIG_VERSION = 4;
+    public static final int HARD_MAX_TRACKED_PER_PLAYER = 4;
 
     private static final Map<String, Tunable> TUNABLES;
     private static final Map<String, Preset> PRESETS;
@@ -75,18 +76,20 @@ public final class SettingsManager {
             maxSpeed = minSpeed;
         }
 
-        int globalLimit = boundedInt(c, "limits.max-tracked-arrows", 256, 1, 10000, warnings);
-        int perPlayerLimit = boundedInt(c, "limits.max-tracked-per-player", 32, 1, globalLimit, warnings);
+        int globalLimit = boundedInt(c, "limits.max-tracked-arrows", 128, 1, 10000, warnings);
+        int perPlayerLimit = boundedInt(c, "limits.max-tracked-per-player", 4, 1,
+                Math.min(globalLimit, HARD_MAX_TRACKED_PER_PLAYER), warnings);
         int cooldown = boundedInt(c, "limits.launch-cooldown-ticks", 0, 0, 1200, warnings);
         int particleInterval = boundedInt(c, "visual.particle-interval-ticks", 1, 1, 200, warnings);
         int pageSize = boundedInt(c, "commands.help-page-size", 7, 4, 12, warnings);
         int maxGive = boundedInt(c, "commands.max-give-amount", 64, 1, 2304, warnings);
-        int beepMin = boundedInt(c, "hud.beep-min-interval-ticks", 2, 1, 40, warnings);
-        int beepMax = boundedInt(c, "hud.beep-max-interval-ticks", 20, 1, 100, warnings);
-        if (beepMax < beepMin) {
-            warnings.add("hud.beep-max-interval-ticks 小于 min，已在内存中提升为 " + beepMin);
-            beepMax = beepMin;
+        int warningMin = boundedInt(c, "hud.warning-min-interval-ticks", 4, 1, 40, warnings);
+        int warningMax = boundedInt(c, "hud.warning-max-interval-ticks", 24, 1, 100, warnings);
+        if (warningMax < warningMin) {
+            warnings.add("hud.warning-max-interval-ticks 小于 min，已在内存中提升为 " + warningMin);
+            warningMax = warningMin;
         }
+        int bowPowerLevel = boundedInt(c, "item.enchantments.power-level", 5, 0, 5, warnings);
 
         Set<String> disabledWorlds = new LinkedHashSet<>();
         for (String world : c.getStringList("worlds.disabled")) {
@@ -118,13 +121,13 @@ public final class SettingsManager {
                 perPlayerLimit,
                 cooldown,
                 c.getBoolean("limits.cancel-rejected-shot", true),
-                c.getDouble("combat.override-arrow-damage", -1.0),
+                boundedDouble(c, "combat.minimum-arrow-damage", 12.0, -1.0, 100.0, warnings),
                 c.getBoolean("visual.glowing-arrow", false),
                 c.getBoolean("visual.particles", true),
                 particleInterval,
-                c.getBoolean("visual.target-marker-particles", true),
                 c.getBoolean("audio.launch-sound", true),
                 c.getBoolean("audio.lock-sounds", true),
+                c.getBoolean("effects.launch", true),
                 c.getBoolean("effects.impact", true),
                 c.getBoolean("effects.self-destruct", true),
                 c.getBoolean("lifecycle.remove-arrows-on-disable", true),
@@ -135,13 +138,17 @@ public final class SettingsManager {
                 feedback(c, "feedback.lock-target", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 feedback(c, "feedback.rejection", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 c.getBoolean("hud.enabled", true),
-                c.getBoolean("hud.shooter-actionbar", true),
-                c.getBoolean("hud.target-actionbar", true),
-                c.getBoolean("hud.warning-beep", true),
-                beepMin,
-                beepMax,
+                c.getBoolean("hud.shooter-bossbar", true),
+                c.getBoolean("hud.target-bossbar", true),
+                c.getBoolean("hud.warning-audio", true),
+                warningMin,
+                warningMax,
                 color(c.getString("item.name", "&b&l制导弓")),
                 colorList(c.getStringList("item.lore")),
+                c.getBoolean("item.enchantments.flame", true),
+                c.getBoolean("item.enchantments.infinity", true),
+                c.getBoolean("item.enchantments.unbreakable", true),
+                bowPowerLevel,
                 Collections.unmodifiableMap(messages),
                 pageSize,
                 maxGive
@@ -296,10 +303,8 @@ public final class SettingsManager {
         m.put("internal-error", "&c命令执行失败。错误编号：&f{reference}&c，请查看服务端日志。");
         m.put("usage", "&e正确用法：&f{usage}");
         m.put("launch", "&a制导箭已发射 &8· &7在途 &f{active}/{limit}");
-        m.put("lock-shooter", "&c锁定 &f{target} &8· &7距离 &f{distance}格");
-        m.put("lock-target", "&c警告：你已被 &f{shooter} &c的制导箭锁定");
-        m.put("hud-shooter", "&eTRACK &7| &f{target} &7| &f{distance}m &7| {dir}");
-        m.put("hud-target", "&c⚠ MISSILE &7| &f{distance}m &7| {dir} &7| &f{shooter}");
+        m.put("guidance-link", "&b制导链路已建立。&7目标遥测已由系统保密。");
+        m.put("inbound-warning", "&4警告：&c侦测到来袭制导弹药。");
         m.put("rejected-permission", "&c你没有使用制导弓的权限。");
         m.put("rejected-global-limit", "&e全服在途制导箭已达到上限 {limit}。");
         m.put("rejected-player-limit", "&e你已有 {active}/{limit} 支制导箭在途。");

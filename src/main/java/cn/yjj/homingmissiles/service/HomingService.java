@@ -95,6 +95,7 @@ public final class HomingService {
         tracked.clear();
         shooterCounts.clear();
         lastLaunchTick.clear();
+        lockHud.shutdown();
     }
 
     public int recoverLoadedArrows() {
@@ -169,6 +170,7 @@ public final class HomingService {
 
     public void forgetPlayer(UUID playerId) {
         lastLaunchTick.remove(playerId);
+        lockHud.forgetPlayer(playerId);
     }
 
     public TrackResult tryTrack(Player shooter, AbstractArrow arrow) {
@@ -183,7 +185,8 @@ public final class HomingService {
         }
 
         int own = activeCount(shooter.getUniqueId());
-        if (!bypass && own >= settings.maxTrackedPerPlayer()) {
+        // 四联数据链是玩法硬约束；管理员权限也不能制造第五枚在途导弹。
+        if (own >= settings.maxTrackedPerPlayer()) {
             return TrackResult.rejected(RejectReason.PLAYER_LIMIT, 0);
         }
 
@@ -202,9 +205,7 @@ public final class HomingService {
         persistState(state);
         lastLaunchTick.put(shooter.getUniqueId(), serviceTick);
 
-        if (settings.launchSound()) {
-            shooter.playSound(shooter.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.7f, 1.5f);
-        }
+        spawnLaunchEffects(arrow);
         messages.feedback(shooter, settings.launchFeedback(), "launch",
                 "active", activeCount(shooter.getUniqueId()),
                 "limit", settings.maxTrackedPerPlayer());
@@ -220,8 +221,13 @@ public final class HomingService {
         if (settingsManager.current().impactEffects()) {
             Location loc = arrow.getLocation();
             World world = arrow.getWorld();
-            world.spawnParticle(Particle.POOF, loc, 12, 0.12, 0.12, 0.12, 0.05);
-            world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 0.65f, 1.2f);
+            world.spawnParticle(Particle.EXPLOSION, loc, 1, 0.0, 0.0, 0.0, 0.0);
+            world.spawnParticle(Particle.SONIC_BOOM, loc, 1, 0.0, 0.0, 0.0, 0.0);
+            world.spawnParticle(Particle.LARGE_SMOKE, loc, 18, 0.22, 0.18, 0.22, 0.035);
+            world.spawnParticle(Particle.FLAME, loc, 12, 0.18, 0.18, 0.18, 0.045);
+            world.spawnParticle(Particle.CRIT, loc, 16, 0.3, 0.25, 0.3, 0.18);
+            world.playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 1.1f, 0.82f);
+            world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_LARGE_BLAST, 0.85f, 0.68f);
         }
     }
 
@@ -299,6 +305,7 @@ public final class HomingService {
         long started = System.nanoTime();
         serviceTick++;
         int processed = 0;
+        enforcePerPlayerLimit();
         lockHud.beginTick(serviceTick);
 
         Iterator<Map.Entry<UUID, TrackedArrow>> iterator = tracked.entrySet().iterator();
@@ -334,6 +341,27 @@ public final class HomingService {
         peakTickMillis = Math.max(peakTickMillis, elapsedMillis);
     }
 
+    private void enforcePerPlayerLimit() {
+        int limit = settingsManager.current().maxTrackedPerPlayer();
+        Map<UUID, Integer> admitted = new HashMap<>();
+        Iterator<Map.Entry<UUID, TrackedArrow>> iterator = tracked.entrySet().iterator();
+        while (iterator.hasNext()) {
+            TrackedArrow state = iterator.next().getValue();
+            AbstractArrow arrow = state.arrow();
+            if (arrow == null || !arrow.isValid() || arrow.isDead()) {
+                continue;
+            }
+            int position = admitted.merge(state.shooterId(), 1, Integer::sum);
+            if (position <= limit) {
+                continue;
+            }
+            clearPersistentState(arrow);
+            arrow.remove();
+            decrementShooter(state.shooterId());
+            iterator.remove();
+        }
+    }
+
     private boolean processArrow(TrackedArrow state) {
         AbstractArrow arrow = state.arrow();
         int age = state.incrementAge();
@@ -358,6 +386,8 @@ public final class HomingService {
         if (age % 20 == 0) {
             persistState(state);
         }
+        Player shooter = plugin.getServer().getPlayer(state.shooterId());
+        lockHud.reportOutbound(shooter);
         if (age < settings.activationDelayTicks()) {
             spawnSearchEffect(arrow, state);
             return true;
@@ -374,12 +404,11 @@ public final class HomingService {
         state.targetId(target.getUniqueId());
         notifyLockIfNeeded(state, target);
         steerArrow(arrow, target);
-        spawnTrackingEffects(arrow, target, state);
+        spawnTrackingEffects(arrow, state);
 
         Location arrowLocation = arrow.getLocation();
         double distance = arrowLocation.distance(target.getEyeLocation());
-        Player shooter = plugin.getServer().getPlayer(state.shooterId());
-        lockHud.reportLock(shooter, target, arrowLocation, distance);
+        lockHud.reportLock(target, arrowLocation, distance);
         return true;
     }
 
@@ -493,31 +522,56 @@ public final class HomingService {
         Player shooter = plugin.getServer().getPlayer(state.shooterId());
         if (settings.lockSounds()) {
             if (shooter != null && shooter.isOnline()) {
-                shooter.playSound(shooter.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.75f, 1.9f);
+                shooter.playSound(shooter.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 0.55f, 1.45f);
+                shooter.playSound(shooter.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.35f, 1.8f);
             }
-            target.playSound(target.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 0.8f, 0.6f);
+            target.playSound(target.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 0.75f, 0.65f);
+            target.playSound(target.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, 0.6f, 1.05f);
         }
 
-        double distance = state.arrow().getLocation().distance(target.getEyeLocation());
         if (shooter != null && shooter.isOnline()) {
-            messages.feedback(shooter, settings.lockShooterFeedback(), "lock-shooter",
-                    "target", target.getName(),
-                    "distance", String.format(Locale.ROOT, "%.1f", distance));
+            // 不向射手暴露目标名、距离、方向或速度；BossBar 也只显示在途通道占用。
+            messages.feedback(shooter, settings.lockShooterFeedback(), "guidance-link");
         }
-        messages.feedback(target, settings.lockTargetFeedback(), "lock-target",
-                "shooter", shooter == null ? "未知射手" : shooter.getName());
+        messages.feedback(target, settings.lockTargetFeedback(), "inbound-warning");
+
+        if (settings.particles()) {
+            Location loc = state.arrow().getLocation();
+            state.arrow().getWorld().spawnParticle(
+                    Particle.ELECTRIC_SPARK, loc, 7, 0.08, 0.08, 0.08, 0.025);
+        }
     }
 
-    private void spawnTrackingEffects(AbstractArrow arrow, Player target, TrackedArrow state) {
+    private void spawnLaunchEffects(AbstractArrow arrow) {
+        PluginSettings settings = settingsManager.current();
+        Location loc = exhaustLocation(arrow, 0.2);
+        World world = arrow.getWorld();
+        if (settings.launchEffects() && settings.particles()) {
+            world.spawnParticle(Particle.FLASH, loc, 1, 0.0, 0.0, 0.0, 0.0);
+            world.spawnParticle(Particle.LARGE_SMOKE, loc, 7, 0.12, 0.12, 0.12, 0.025);
+            world.spawnParticle(Particle.SMALL_FLAME, loc, 9, 0.08, 0.08, 0.08, 0.035);
+        }
+        if (settings.launchSound()) {
+            world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_SHOOT, 0.9f, 0.72f);
+            world.playSound(loc, Sound.ITEM_CROSSBOW_SHOOT, 0.55f, 0.55f);
+        }
+    }
+
+    private void spawnTrackingEffects(AbstractArrow arrow, TrackedArrow state) {
         PluginSettings settings = settingsManager.current();
         if (!settings.particles() || state.ageTicks() % settings.particleIntervalTicks() != 0) {
             return;
         }
         World world = arrow.getWorld();
-        world.spawnParticle(Particle.FLAME, arrow.getLocation(), 2, 0.025, 0.025, 0.025, 0.004);
-        if (settings.targetMarkerParticles()) {
-            Location marker = target.getLocation().add(0, 1.0, 0);
-            world.spawnParticle(Particle.ELECTRIC_SPARK, marker, 1, 0.12, 0.25, 0.12, 0.01);
+        Location exhaust = exhaustLocation(arrow, 0.38);
+        world.spawnParticle(Particle.SMALL_FLAME, exhaust, 2, 0.018, 0.018, 0.018, 0.006);
+        world.spawnParticle(Particle.WHITE_SMOKE, exhaust, 2, 0.035, 0.035, 0.035, 0.012);
+        if (state.ageTicks() % 4 == 0) {
+            world.spawnParticle(Particle.END_ROD, exhaust, 1, 0.012, 0.012, 0.012, 0.0);
+        }
+        if (state.ageTicks() % 3 == 0) {
+            Location wake = exhaustLocation(arrow, 0.78);
+            world.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE, wake, 1, 0.025, 0.025, 0.025, 0.002);
         }
     }
 
@@ -526,15 +580,22 @@ public final class HomingService {
         if (!settings.particles() || state.ageTicks() % settings.particleIntervalTicks() != 0) {
             return;
         }
-        arrow.getWorld().spawnParticle(Particle.SMOKE, arrow.getLocation(), 1, 0.025, 0.025, 0.025, 0.003);
+        Location exhaust = exhaustLocation(arrow, 0.32);
+        arrow.getWorld().spawnParticle(Particle.WHITE_SMOKE, exhaust, 1, 0.025, 0.025, 0.025, 0.004);
+        if (state.ageTicks() % 3 == 0) {
+            arrow.getWorld().spawnParticle(Particle.SMALL_FLAME, exhaust, 1, 0.01, 0.01, 0.01, 0.002);
+        }
     }
 
     private void selfDestruct(AbstractArrow arrow) {
         if (settingsManager.current().selfDestructEffects()) {
             Location loc = arrow.getLocation();
             World world = arrow.getWorld();
-            world.spawnParticle(Particle.SMOKE, loc, 16, 0.15, 0.15, 0.15, 0.03);
-            world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_BLAST_FAR, 0.7f, 0.8f);
+            world.spawnParticle(Particle.FLASH, loc, 1, 0.0, 0.0, 0.0, 0.0);
+            world.spawnParticle(Particle.LARGE_SMOKE, loc, 14, 0.2, 0.2, 0.2, 0.025);
+            world.spawnParticle(Particle.CLOUD, loc, 8, 0.15, 0.15, 0.15, 0.04);
+            world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_BLAST_FAR, 0.8f, 0.58f);
+            world.playSound(loc, Sound.BLOCK_BEACON_DEACTIVATE, 0.45f, 0.5f);
         }
         clearPersistentState(arrow);
         arrow.remove();
@@ -545,9 +606,18 @@ public final class HomingService {
         arrow.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);
         arrow.setGravity(!settings.noGravity());
         arrow.setGlowing(settings.glowingArrow());
-        if (settings.overrideDamage() >= 0.0) {
-            arrow.setDamage(settings.overrideDamage());
+        if (settings.minimumDamage() >= 0.0 && arrow.getDamage() < settings.minimumDamage()) {
+            arrow.setDamage(settings.minimumDamage());
         }
+    }
+
+    private static Location exhaustLocation(AbstractArrow arrow, double distance) {
+        Location result = arrow.getLocation();
+        Vector velocity = arrow.getVelocity();
+        if (VectorMath.isFinite(velocity) && velocity.lengthSquared() > 1.0E-8) {
+            result.add(velocity.clone().normalize().multiply(-distance));
+        }
+        return result;
     }
 
     private void persistState(TrackedArrow state) {

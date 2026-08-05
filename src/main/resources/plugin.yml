@@ -21,7 +21,7 @@ permissions:
     default: false
 
   homingmissiles.bypass.limits:
-    description: 绕过全服/单玩家箭数限制和发射冷却
+    description: 绕过全服箭数限制和发射冷却（不能突破每人4枚硬上限）
     default: op
 
   homingmissiles.command.help:

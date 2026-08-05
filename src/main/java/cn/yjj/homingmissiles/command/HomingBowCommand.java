@@ -235,6 +235,7 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
         }
 
         Player target;
+        boolean selfInspection;
         if (args.length == 1) {
             if (!(sender instanceof Player player)) {
                 usage(sender, label, "inspect <玩家>");
@@ -244,17 +245,18 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
                 return true;
             }
             target = player;
+            selfInspection = true;
         } else {
             target = plugin.getServer().getPlayerExact(args[1]);
             if (target == null) {
                 messages.send(sender, "player-not-found", "player", args[1]);
                 return true;
             }
-            boolean self = sender instanceof Player player && player.getUniqueId().equals(target.getUniqueId());
-            if (!self && !require(sender, "homingmissiles.command.inspect.others")) {
+            selfInspection = sender instanceof Player player && player.getUniqueId().equals(target.getUniqueId());
+            if (!selfInspection && !require(sender, "homingmissiles.command.inspect.others")) {
                 return true;
             }
-            if (self && !require(sender, "homingmissiles.command.inspect.self")) {
+            if (selfInspection && !require(sender, "homingmissiles.command.inspect.self")) {
                 return true;
             }
         }
@@ -265,6 +267,11 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
         messages.sendRaw(sender, "&b&l制导状态检查 &8· &f" + target.getName());
         messages.sendRaw(sender, "&7主手物品：" + (holding ? "&a有效制导弓" : "&8不是制导弓"));
         messages.sendRaw(sender, "&7在途箭数：&f" + inspection.arrows().size());
+        if (selfInspection) {
+            messages.sendRaw(sender, "&8目标、距离、方向与速度遥测对发射者保密。");
+            messages.sendRaw(sender, "&8&m                                                    ");
+            return true;
+        }
         int shown = 0;
         for (HomingService.ArrowInfo arrow : inspection.arrows()) {
             if (shown++ >= 8) {
@@ -551,8 +558,8 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
                 "兼容旧版 /hbow give 命令。", "支持Tab补全在线玩家和常用数量。");
         addHelp("status", "homingmissiles.command.status", "status [verbose]", "查看制导系统运行状态",
                 "verbose 会显示调度耗时、隔离异常和活跃射手。", "详细模式需要额外权限。");
-        addHelp("inspect", "homingmissiles.command.inspect.self", "inspect [玩家]", "检查持弓状态和在途箭目标",
-                "默认检查自己。", "检查他人需要 homingmissiles.command.inspect.others。");
+        addHelp("inspect", "homingmissiles.command.inspect.self", "inspect [玩家]", "检查持弓状态和在途通道",
+                "自检只显示通道占用，不泄露目标遥测。", "管理员检查他人需要 homingmissiles.command.inspect.others。");
         addHelp("clear", "homingmissiles.command.clear.own", "clear <mine|all|player|world> [名称]", "清理在途制导箭",
                 "mine 仅删除自己的箭。", "all/player/world 需要管理员权限。", "cancel 是 clear 的别名。");
         addHelp("preset", "homingmissiles.command.preset", "preset <balanced|agile|realistic>", "切换一组经过校验的制导参数",

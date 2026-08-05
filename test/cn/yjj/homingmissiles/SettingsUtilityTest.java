@@ -10,6 +10,9 @@ public final class SettingsUtilityTest {
     }
 
     public static void main(String[] args) {
+        if (SettingsManager.HARD_MAX_TRACKED_PER_PLAYER != 4) {
+            throw new AssertionError("hard per-player limit must stay at four");
+        }
         equal(SettingsManager.compact(8.0), "8", "integer compact");
         equal(SettingsManager.compact(0.015), "0.015", "decimal compact");
         equal(SettingsManager.compact(2.8000), "2.8", "trailing zero compact");

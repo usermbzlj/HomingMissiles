@@ -24,7 +24,7 @@ HomingMissilesPlugin
 └─ HomingBowCommand ──> SettingsManager / HomingService / HomingBowFactory
 ```
 
-`LockHudService` 在每个制导 tick 聚合锁定关系，向射手/目标刷 ActionBar，并向被锁目标播放距离相关的持续蜂鸣。不参与索敌与转向。
+`LockHudService` 在每个制导 tick 聚合出站与来袭关系，维护原生 BossBar，并向被锁目标播放来自导弹方向的分层空间警报。不参与索敌与转向，也不会接收或向射手展示目标身份等具体遥测。
 
 `HomingMissilesPlugin` 是组合根。其他组件不应通过静态全局单例重新定位服务。
 
