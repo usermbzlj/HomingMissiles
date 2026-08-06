@@ -19,12 +19,14 @@ HomingMissilesPlugin
 ├─ SettingsManager ──> PluginSettings
 ├─ MessageService
 ├─ HomingBowFactory
-├─ HomingService ──> TrackedArrow / GuidanceMath / VectorMath / LockHudService
+├─ HomingService ──> ManualLockService / TrackedArrow / GuidanceMath / VectorMath / LockHudService
 ├─ HomingListener ──> HomingService
 └─ HomingBowCommand ──> SettingsManager / HomingService / HomingBowFactory
 ```
 
-`LockHudService` 在每个制导 tick 聚合出站与来袭关系，通过资源包位图字体绘制像素 HMD，并向被锁目标播放来自导弹方向的分层空间警报。资源包不可用时才维护 BossBar 降级界面。它不参与索敌与转向，也不会向射手展示目标身份等具体遥测。
+`ManualLockService` 在拉弓期间扫描射手视野内的有效玩家，以视线、距离和视锥角筛选唯一候选，维护进度、断锁容错与平滑屏幕坐标。完整锁定只能被下一次射击消费一次。
+
+`LockHudService` 在每个制导 tick 聚合标定、出站与来袭状态，并对视角、速度、高度、离地高度和标定框位置做逐 tick 插值。它把 535 个字形中的基础、细粒度飞行仪表、标定框/进度、挂点和来袭层用负间距组合成 ActionBar 图层流。资源包不可用时才维护 BossBar 和原版声音降级。
 
 `HomingMissilesPlugin` 是组合根。其他组件不应通过静态全局单例重新定位服务。
 
@@ -49,6 +51,7 @@ HomingMissilesPlugin
 | `homing_projectile` | BYTE | 该箭由插件管理 |
 | `shooter_uuid` | STRING | 实际射手 UUID |
 | `age_ticks` | INTEGER | 已飞行年龄 |
+| `target_uuid` | STRING | 发射前手动标定的唯一目标 UUID |
 | `session_id` | STRING | 创建/接管该箭的插件会话 |
 
 弓 PDC 保存：
@@ -68,11 +71,12 @@ HomingMissilesPlugin
 ```text
 safeTick
   ├─ 记录开始时间
+  ├─ ManualLockService.tick（拉弓视锥、进度、锁定框）
   ├─ 对 tracked 创建稳定迭代视图
   ├─ processArrow(state)
   │   ├─ 验证箭实体
   │   ├─ 增加年龄并检查寿命
-  │   ├─ 捕获或验证保持圈内的目标
+  │   ├─ 验证手动标定目标仍在保持圈内
   │   ├─ 动态截击解 / 后程点火判定
   │   ├─ steerArrow
   │   ├─ notifyLockIfNeeded
@@ -83,7 +87,7 @@ safeTick
 
 不要让一个箭异常传播到调度任务边界，否则 Bukkit 会停止后续任务执行或持续刷异常。
 
-## 5. 目标选择
+## 5. 手动标定与目标绑定
 
 候选目标必须满足：
 
@@ -92,11 +96,12 @@ safeTick
 - 不是射手；
 - 没有 `homingmissiles.target.exempt`；
 - 游戏模式符合配置；
-- 新目标在首次捕获圈内，或当前锁定目标仍在更大的保持圈内；
+- 拉弓标定时位于 `tracking.range` 和中央视锥内；
+- 发射后仍位于更大的 `lock-retention-range` 保持圈内；
 - 若开启 vanish 尊重，则射手可见目标；
-- 若开启视线要求，则视线无遮挡。
+- 手动标定时视线无遮挡；飞行时是否继续要求视线由配置决定。
 
-动态重选不是每次无条件切换。新目标必须进入首次捕获圈，并满足 `switch-advantage-blocks` 的距离优势；当前目标则能在 `lock-retention-range` 内保持锁定。失锁不会把远处目标当作新目标重新捕获。
+标定进度达到阈值后，`EntityShootBowEvent` 才能消费锁定。未锁定时监听器强制取消射击；成功后 `target_uuid` 同时进入 `TrackedArrow` 与箭 PDC。飞行中只验证这个 UUID，不遍历并选择新玩家；暂时失效时导弹保持该 UUID 等待恢复，绝不会自动换人。
 
 ## 6. 飞行数学
 

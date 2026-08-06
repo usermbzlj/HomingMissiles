@@ -452,7 +452,7 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
         }
         messages.sendRaw(sender, "&b&lHomingMissiles &fv" + HomingMissilesPlugin.VERSION
                 + " &8· &7Paper 1.21.x / Java 21");
-        messages.sendRaw(sender, "&7连续Motion制导、多射手多箭、动态重选、热恢复、配置校验和完整命令交互。");
+        messages.sendRaw(sender, "&7手动标定、目标唯一绑定、连续Motion制导、热恢复、配置校验和完整命令交互。");
         return true;
     }
 

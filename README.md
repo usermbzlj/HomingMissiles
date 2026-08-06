@@ -2,9 +2,9 @@
 
 面向 **Paper / Purpur / Leaf 1.21.x** 的高伤害连续物理制导弓插件。插件逐 tick 修改箭的真实速度向量，不传送箭实体，因此保留惯性、转弯半径、原版碰撞与伤害流程。每名玩家最多同时维持 4 枚在途导弹。
 
-锁定后导弹进入独立的 192 格保持圈，以动态截击解持续预判目标；达到时限或发现目标连续拉远后，不可逆地点燃后程发动机，把最高速度提升到 5.6 格/tick。HUD 使用资源包 PNG 绘制真正的像素风头戴显示器：射手只看到准星和四个数据链挂点，目标名、距离、方向和速度均不下发；被追踪者看到离散方向与三级威胁图形，并从导弹方向听到随距离收紧的空间警报。
+玩家必须拉住制导弓，把视野内的一名有效玩家持续保持在标定框内，看到 `LOCK` 后才能松弦发射；未完成锁定会强制取消射击。导弹只追踪发射前手动标定的 UUID，不会在飞行中自动换人；锁定后进入独立的 192 格保持圈，以动态截击解持续预判目标。HUD 参考 FlightHud 的飞行仪表语言，由资源包动态叠加航向、速度、高度、离地高度、俯仰梯、人工地平线、飞行矢量、标定框、锁定进度、挂点与来袭方向，并使用逐 tick 插值和更细的量化档位平滑过渡。资源包同时携带为 Minecraft 短促、干燥反馈风格定制合成的发射/锁定音，以及 CC0 来袭警报；未加载时自动回退到原版声音与 BossBar。
 
-> 当前发布线：`3.0.0`（远距截击 / 像素 HMD，`config-version: 5`）
+> 当前发布线：`3.0.0`（手动标定 / 平滑像素 HMD，`config-version: 6`）
 > 编译 API：Paper API `1.21.11-R0.1-SNAPSHOT`
 > Java：21  
 > 源码仓库：https://github.com/usermbzlj/HomingMissiles  
@@ -52,7 +52,7 @@ sudo bash /your/upload/directory/replace-homingmissiles-3.0.0.sh
 ```
 
 脚本默认读取同目录的 JAR 与 `deploy-config.properties`，并按配置中的服务器目录精确匹配唯一的 systemd 服务。命令行 `--jar`、`--config`、`--server-dir` 和 `--service` 可以覆盖配置。脚本会固定校验 JAR 的 SHA-256
-`fa090d31cd93dcd44c47a3937d65167e921d73f87538dceafb42ec26bc1f1fb6`，自动停服、备份旧 JAR、原子替换、重启并验证插件启用；任一步失败都会尝试恢复旧 JAR 和原服务状态。现有 `plugins/HomingMissiles/config.yml` 不会被覆盖。
+`510ceb41aca22e7f0acede692715668266e5a51ea6037f8bdf28be91850ef624`，自动停服、备份旧 JAR、原子替换、重启并验证插件启用；任一步失败都会尝试恢复旧 JAR 和原服务状态。现有 `plugins/HomingMissiles/config.yml` 不会被覆盖。
 
 如果不使用脚本，必须手工完成：完全停服、移走所有旧版 HomingMissiles JAR、放入 3.0.0 JAR、完整启动。不要使用 Minecraft 的 `/reload` 代替重启，也不要在 `plugins/` 中同时保留多个版本。
 
@@ -231,7 +231,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 - 运行向量边界测试；
 - 运行命令纠错与 Tab 前缀测试；
 - 运行配置格式工具测试；
-- 运行动态截击/后程点火以及 HUD 字形、方向分区、威胁等级和警报节奏测试。
+- 运行动态截击/后程点火以及 HUD 图层区间、航向/俯仰/速度/高度量化、方向分区、威胁等级和警报节奏测试。
 
 离线 API 桩只用于编译和纯逻辑测试，**不能证明真实 Paper 运行兼容性，也不会被打入发布 JAR**。
 
@@ -245,13 +245,13 @@ powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 4. 单人射箭时不会锁定自己。
 5. 两名及以上玩家同时使用时，每支箭只排除自己的射手。
 6. 多箭并发时不会串目标或停止调度。
-7. 目标死亡、离线、跨世界、进入被排除模式后能够解除或重选。
+7. 目标死亡、离线、跨世界、进入被排除模式后导弹停止制导，但不会自动重选其他玩家。
 8. 箭正常撞墙、命中、自毁，不发生瞬移。
 9. 达到个人/全服上限和冷却时反馈准确。
-10. 接受资源包后，射手出现青色像素准星和四个挂点，但看不到目标遥测；被锁玩家出现像素化方向/威胁符号，并从导弹方向听到逐步加急的空间警报；箭结束后图形与警报都消失。
+10. 拉弓时只有把有效玩家保持在中央视锥内满 16 tick 才出现 `LOCK`；提前松弦会强制取消，完成后松弦只追踪标定对象。
 11. 第五枚导弹必定被拒绝，即使射手拥有 `homingmissiles.bypass.limits`；默认命中伤害不低于 12。
 12. 新发放的弓默认带火矢、无限、耐久 III、不可损坏与力量 V；关闭任一 `item.enchantments.*` 后重新发放可验证对应变化。
-13. 目标先进入 80 格捕获圈，锁定后离开捕获圈仍能在 192 格保持圈内被追踪；连续拉远会触发不可逆的后程加速。
+13. 接受资源包后，标定框/进度以及航向、速度、高度、俯仰和飞行矢量逐 tick 平滑更新；发射者听到定制合成的发射/锁定反馈，被锁玩家看到方向/威胁层并听到来自 CC0 素材的逐步加急空间警报。
 14. 资源包拒绝/失败时正确降级为 BossBar；重新接受并加载后恢复像素 HMD。
 15. `/hbow reload` 面对非法配置时保留可用设置并给出警告。
 16. 区块卸载、重新加载和服务器重启行为符合 `lifecycle` 配置。
@@ -335,6 +335,7 @@ HomingMissilesPlugin/
 │  │  └─ TrackedArrow.java
 │  ├─ service/
 │  │  ├─ HomingService.java
+│  │  ├─ ManualLockService.java
 │  │  └─ LockHudService.java
 │  └─ util/
 │     ├─ CommandUtil.java
@@ -345,6 +346,15 @@ HomingMissilesPlugin/
 ├─ src/main/resources/
 │  ├─ plugin.yml
 │  └─ config.yml
+├─ src/main/hud/audio/
+│  ├─ launch.ogg
+│  ├─ lock_confirm.ogg
+│  ├─ missile_warning.ogg
+│  └─ missile_critical.ogg
+├─ src/main/hud/third-party/
+│  ├─ README.md
+│  ├─ CC0-1.0.txt
+│  └─ 可审计的原始下载文件
 ├─ test/
 │  └─ cn/yjj/homingmissiles/
 ├─ stubs/
@@ -353,6 +363,7 @@ HomingMissilesPlugin/
 │  ├─ verify-offline.sh
 │  ├─ verify-offline.ps1
 │  ├─ HudPackBuilder.java
+│  ├─ build-hud-audio.ps1
 │  ├─ test-replacement-script.sh
 │  ├─ replace-homingmissiles-3.0.0.sh
 │  ├─ deploy-config.example.properties
@@ -380,12 +391,13 @@ HomingMissilesPlugin/
 | `HomingBowFactory` | 创建和识别带 PDC 身份的制导弓 |
 | `HomingListener` | 连接 Bukkit 事件与领域服务 |
 | `HomingService` | 箭状态、目标选择、每 tick 制导、持久化恢复、限制和诊断 |
-| `LockHudService` | 发送/跟踪 HUD 资源包，绘制像素 HMD，维护降级 BossBar，并播放空间化警报 |
+| `ManualLockService` | 拉弓期间的视锥筛选、锁定进度/容错与单次目标消费 |
+| `LockHudService` | 发送/跟踪 HUD 资源包，平滑飞行遥测与标定框，组合分层 HMD，维护降级 BossBar，并选择 CC0/原版空间警报 |
 | `TrackedArrow` | 单支在途箭的目标观测、拉远计数和后程点火状态 |
 | `HomingBowCommand` | 命令路由、权限、帮助、参数校验和 Tab 补全 |
 | `MessageService` | 消息模板、占位符、聊天与 Action Bar 输出 |
 | `GuidanceMath` | 动态截击时间解与后程发动机点火判定 |
-| `HudFormat` | 私有字形、八方向、三级威胁与警报节奏的纯逻辑映射 |
+| `HudFormat` | 535 个图层字形、负间距叠层、细粒度飞行仪表、49 区标定框、锁定进度、八方向与警报节奏映射 |
 | `VectorMath` | 有限角速度转向与数值边界保护 |
 | `CommandUtil` | 前缀过滤、编辑距离和命令建议 |
 
@@ -413,9 +425,10 @@ onEnable
 ```text
 EntityShootBowEvent
   → 检查射手、弓身份和权限
+  → 消费 ManualLockService 已完成的单次锁定
   → HomingService.tryTrack
   → 检查世界、冷却、个人/全服上限
-  → 写入箭的 PDC 状态
+  → 写入射手和已标定目标 UUID 的箭 PDC 状态
   → 加入 tracked 状态表
 ```
 
@@ -424,11 +437,11 @@ EntityShootBowEvent
 ```text
 Bukkit 主线程调度
   → LockHudService.beginTick
+  → ManualLockService.tick（拉弓、视锥候选、锁定进度）
   → 遍历 tracked 箭
   → 单箭 try/catch 隔离
   → 校验实体、世界和寿命
-  → 选择或复用目标
-  → 首次捕获圈 / 锁后保持圈验证
+  → 只验证发射前标定目标的保持圈，不重新选人
   → 动态截击时间解与目标预判位置
   → 需要时不可逆地点燃后程发动机
   → VectorMath.rotateTowards
@@ -472,6 +485,7 @@ onDisable → 按 lifecycle 设置删除或保留在途箭
    - 物品：`homing_bow`
    - 箭：`homing_projectile`
    - 射手：`shooter_uuid`
+   - 标定目标：`target_uuid`
    - 年龄：`age_ticks`
    - 会话：`session_id`
 
@@ -511,11 +525,12 @@ onDisable → 按 lifecycle 设置删除或保留在途箭
 6. `docs/COMMANDS.md`
 7. 命令工具测试或实机权限测试
 
-### 修改目标选择
+### 修改手动标定与目标验证
 
 入口位于：
 
 ```text
+ManualLockService
 HomingService.selectTarget
 HomingService.isValidTarget
 ```
@@ -528,7 +543,9 @@ HomingService.isValidTarget
 - `target.exempt`；
 - `Player#canSee`；
 - 视线检测；
-- 动态换目标防抖。
+- 视锥边缘与断锁容错；
+- 未锁松弦强制取消；
+- 发射后不切换到其他 UUID。
 
 ### 修改飞行算法
 
@@ -565,13 +582,13 @@ VectorMath.rotateTowards
 ## 配置、命令与权限
 
 - 完整命令：[`docs/COMMANDS.md`](docs/COMMANDS.md)
-- 完整配置：[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)（含远距保持、后程加速、附魔、特效、`hud.*` 与 `config-version: 5`）
+- 完整配置：[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)（含手动标定、远距保持、后程加速、`hud.*` 与 `config-version: 6`）
 - 像素 HUD 部署：[`docs/HUD_RESOURCE_PACK.md`](docs/HUD_RESOURCE_PACK.md)
 - 安装和排错：[`docs/INSTALL.md`](docs/INSTALL.md)
 - 开发工作流：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
 - 变更记录：[`CHANGELOG.md`](CHANGELOG.md)
 
-升级后，旧配置若仍为 `config-version: 2/3/4`，缺失字段会使用 5 版安全默认值并在重载时给出版本警告；文件不会被自动覆盖。要启用像素 HMD，必须补齐 `hud.resource-pack.url` 与 `sha1`，或把资源合并进全服资源包后启用 `assume-server-pack-provides-hud`。附魔设置只影响之后新发放的弓。
+升级后，旧配置若仍为 `config-version: 2/3/4/5`，缺失字段会使用 6 版安全默认值并在重载时给出版本警告；文件不会被自动覆盖。6 版必须手动锁定才能发射，并新增 `targeting.manual-lock.*`。要启用像素 HMD，必须补齐 `hud.resource-pack.url` 与 `sha1`，或把资源合并进全服资源包后启用 `assume-server-pack-provides-hud`。
 
 常用命令：
 

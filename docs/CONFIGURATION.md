@@ -1,10 +1,10 @@
 # 配置参考
 
-当前配置版本为 `5`。执行 `/hbow reload` 会校验并原子替换内存设置，不会覆盖原文件。
+当前配置版本为 `6`。执行 `/hbow reload` 会校验并原子替换内存设置，不会覆盖原文件。
 
 ## tracking
 
-- `range`：首次捕获距离，默认 `80`。导弹只在这个近圈内建立新锁定。
+- `range`：手动标定距离，默认 `80`。拉弓时只在这个近圈内筛选玩家。
 - `lock-retention-range`：锁定保持距离，默认 `192`，且不能小于 `range`。已锁目标即使飞出捕获圈，仍会在保持圈内被追踪。
 - `max-lifetime-ticks`：飞行寿命。20 tick = 1秒。
 - `activation-delay-ticks`：离弦后延迟索敌，防止立即反折。
@@ -16,19 +16,27 @@
 - `terminal-boost.delay-ticks`：持续锁定达到该时长后点燃后程发动机。
 - `terminal-boost.escape-trigger-ticks`：目标连续拉远达到该时长后提前点火。
 - `terminal-boost.acceleration-per-tick` / `max-speed`：后程加速度与最高速度，默认 `0.075` / `5.6` 格/tick。
-- `dynamic-retargeting`：允许切换到明显更近的目标。
-- `switch-advantage-blocks`：切换目标所需距离优势，防抖。
+- `dynamic-retargeting` / `switch-advantage-blocks`：6 版不再动态换人，保留这两个键仅为旧配置兼容。
 - `require-line-of-sight`：要求无遮挡；开启会增加成本。
 - `target-creative` / `target-spectator`：是否追踪对应模式。
 - `respect-vanish`：尊重 `Player#canSee`，兼容常见隐身插件。
 - `no-gravity`：关闭箭重力。
+
+## targeting.manual-lock
+
+- `duration-ticks`：目标持续位于标定视锥内多久才完成锁定，默认 `16` tick。
+- `cone-degrees`：开始标定的中央视锥半角，默认 `10°`。
+- `break-cone-degrees`：已锁目标允许的较大保持半角，默认 `16°`，不能小于开始视锥。
+- `break-grace-ticks`：短暂移出视锥时保留锁定的容错时间，默认 `4` tick。
+
+玩家必须正在使用由插件发放的制导弓，并把一个有效、可见且无遮挡的玩家保持在视锥内。完成锁定后，下一次松弦会消费这次锁定并把目标 UUID 写入箭 PDC；未完成锁定会无条件取消这一发，即使 `limits.cancel-rejected-shot` 为 `false`。锁定是单次的，每发都必须重新标定。
 
 ## limits
 
 - `max-tracked-arrows`：全服在途上限，默认 128。
 - `max-tracked-per-player`：单玩家在途上限，默认且硬上限为 4；可以设得更低，不能设得更高。
 - `launch-cooldown-ticks`：发射冷却。
-- `cancel-rejected-shot`：拒绝制导时取消射击，避免变成普通箭。
+- `cancel-rejected-shot`：权限、世界、冷却或数量限制拒绝制导时是否取消射击。未完成手动锁定始终取消，不受此开关影响。
 
 `homingmissiles.bypass.limits` 只绕过全服上限和冷却，不绕过每人 4 枚的硬上限。
 
@@ -79,7 +87,7 @@ item:
 
 ## hud
 
-HUD 的主路径是项目自带资源包中的 `homingmissiles:hud` 位图字体：插件向 ActionBar 发送一个私有字形，客户端用透明 PNG 绘制像素化头戴显示器。它不是由文本字符拼出的假仪表，也不要求安装 Fabric/Forge 客户端模组。资源包没有就绪时才使用 BossBar 降级。
+HUD 的主路径是项目自带资源包中的 `homingmissiles:hud` 位图字体：插件向 ActionBar 发送由私有字形与负间距组成的图层流，客户端把透明 PNG 叠成动态头戴显示器。飞行遥测先逐 tick 插值，再映射到 5° 航向、5° 俯仰、2 格/秒速度和 4 格高度档；标定框位置本身也经过插值，因此不会再整幅贴图生硬跳变。资源包没有就绪时才使用 BossBar 降级。
 
 - `enabled`：HUD 与来袭警报总开关。
 - `pixel-overlay`：资源包就绪时启用像素 HMD。
@@ -88,10 +96,10 @@ HUD 的主路径是项目自带资源包中的 `homingmissiles:hud` 位图字体
 - `resource-pack.sha1`：对应 ZIP 的 40 位 SHA-1，用于完整性校验和客户端缓存。
 - `resource-pack.required` / `prompt`：是否强制加载以及确认提示。
 - `resource-pack.assume-server-pack-provides-hud`：若已经把 `assets/homingmissiles` 合并进全服资源包，则设为 `true`，插件不再单独发送 ZIP。
-- `warning-audio`：从最接近导弹方向播放空间化幽匿/心跳组合音。
+- `warning-audio`：从最接近导弹方向播放空间警报；资源包就绪时使用经剪辑的 CC0 普通/临界座舱音，未就绪时使用幽匿/心跳原版组合音。
 - `warning-min-interval-ticks` / `warning-max-interval-ticks`：终端阶段与远距阶段的警报间隔。
 
-射手只得到青色准星和 4 个挂点占用；目标身份、距离、方向、速度以及精确锁定参数都不会发给射手。被追踪者得到八个离散方向和远/中/近三级威胁图形。完整部署见 [HUD_RESOURCE_PACK.md](HUD_RESOURCE_PACK.md)。
+所有获得像素 HUD 的战斗参与者都会看到航向滑尺、速度、高度、离地高度、俯仰梯、人工地平线和飞行矢量。拉弓射手额外看到随目标移动的标定框与 16 档进度，完成后显示绿色 `LOCK`；飞行阶段只显示 4 个挂点占用，不下发目标名、距离、方向或速度。被追踪者额外得到八个离散方向和远/中/近三级威胁图形。完整部署见 [HUD_RESOURCE_PACK.md](HUD_RESOURCE_PACK.md)。
 
 ## worlds
 

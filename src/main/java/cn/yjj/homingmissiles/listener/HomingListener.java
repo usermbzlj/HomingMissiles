@@ -46,7 +46,7 @@ public final class HomingListener implements Listener {
 
         PluginSettings settings = settingsManager.current();
         if (!shooter.hasPermission("homingmissiles.use")) {
-            reject(event, arrow, settings);
+            reject(event, arrow, settings, false);
             messages.feedback(shooter, settings.rejectionFeedback(), "rejected-permission");
             return;
         }
@@ -56,7 +56,7 @@ public final class HomingListener implements Listener {
             return;
         }
 
-        reject(event, arrow, settings);
+        reject(event, arrow, settings, result.reason() == HomingService.RejectReason.MANUAL_LOCK_REQUIRED);
         switch (result.reason()) {
             case GLOBAL_LIMIT -> messages.feedback(shooter, settings.rejectionFeedback(),
                     "rejected-global-limit", "limit", settings.maxTrackedArrows());
@@ -68,6 +68,8 @@ public final class HomingListener implements Listener {
                     "rejected-cooldown", "ticks", result.remainingTicks());
             case WORLD_DISABLED -> messages.feedback(shooter, settings.rejectionFeedback(),
                     "rejected-world");
+            case MANUAL_LOCK_REQUIRED -> messages.feedback(shooter, settings.rejectionFeedback(),
+                    "rejected-manual-lock");
             default -> {
             }
         }
@@ -106,8 +108,9 @@ public final class HomingListener implements Listener {
         homingService.handleResourcePackStatus(event);
     }
 
-    private static void reject(EntityShootBowEvent event, AbstractArrow arrow, PluginSettings settings) {
-        if (settings.cancelRejectedShot()) {
+    private static void reject(EntityShootBowEvent event, AbstractArrow arrow,
+                               PluginSettings settings, boolean forceCancel) {
+        if (forceCancel || settings.cancelRejectedShot()) {
             event.setCancelled(true);
             if (arrow.isValid()) {
                 arrow.remove();

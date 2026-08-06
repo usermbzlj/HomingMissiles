@@ -8,7 +8,7 @@ umask 077
 
 readonly RELEASE_VERSION="3.0.0"
 readonly RELEASE_JAR_NAME="HomingMissiles-3.0.0.jar"
-readonly EXPECTED_SHA256="fa090d31cd93dcd44c47a3937d65167e921d73f87538dceafb42ec26bc1f1fb6"
+readonly EXPECTED_SHA256="510ceb41aca22e7f0acede692715668266e5a51ea6037f8bdf28be91850ef624"
 readonly EXPECTED_MAIN="cn.yjj.homingmissiles.HomingMissilesPlugin"
 readonly DEFAULT_CONFIG_NAME="deploy-config.properties"
 

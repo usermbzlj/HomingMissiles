@@ -81,7 +81,7 @@ unzip -p target/HomingMissiles-3.0.0.jar plugin.yml
 unzip -p target/HomingMissiles-3.0.0.jar META-INF/MANIFEST.MF
 ```
 
-同时检查 `target/hud-packs/` 中存在两个 ZIP、两个 `.sha1` 和预览 PNG。解压 ZIP 后必须包含 `pack.mcmeta`、`assets/homingmissiles/font/hud.json` 和像素纹理；人工确认预览中的透明背景、准星、四挂点和三种威胁颜色均无裁切。
+同时检查 `target/hud-packs/` 中存在两个 ZIP、两个 `.sha1` 和预览 PNG。解压 ZIP 后必须包含 `pack.mcmeta`、`assets/homingmissiles/font/hud.json`、像素纹理、`sounds.json` 和四个 `sounds/hud/*.ogg`；确认字体包含 `U+E0FF = -193` 的负间距，并人工检查预览中的航向/速度/高度滑尺、俯仰梯、飞行矢量、黄色标定框、绿色 `LOCK`、四挂点和三种威胁颜色均无裁切。
 
 ## 5. 实机测试
 

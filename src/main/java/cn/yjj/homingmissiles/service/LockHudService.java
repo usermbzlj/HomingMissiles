@@ -8,6 +8,8 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
+import org.bukkit.World;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
@@ -31,15 +33,22 @@ import java.util.UUID;
 public final class LockHudService {
     public static final UUID HUD_PACK_ID = UUID.fromString("4b388bf5-7ba1-4d5e-97e8-fb1f38d3a300");
     private static final Key HUD_FONT = Key.key("homingmissiles", "hud");
+    private static final String SOUND_LOCK_CONFIRM = "homingmissiles:hud.lock_confirm";
+    private static final String SOUND_MISSILE_WARNING = "homingmissiles:hud.missile_warning";
+    private static final String SOUND_MISSILE_CRITICAL = "homingmissiles:hud.missile_critical";
+    private static final String SOUND_LAUNCH = "homingmissiles:hud.launch";
 
     private final SettingsManager settingsManager;
 
     private long serviceTick;
     private final Map<UUID, ShooterState> shooterStates = new HashMap<>();
     private final Map<UUID, TargetThreat> targetThreats = new HashMap<>();
+    private final Map<UUID, AimDisplay> aimDisplays = new HashMap<>();
+    private final Map<UUID, TelemetryState> telemetryStates = new HashMap<>();
     private final Map<UUID, Long> nextWarningTick = new HashMap<>();
     private final Map<UUID, BossBar> shooterBars = new HashMap<>();
     private final Map<UUID, BossBar> targetBars = new HashMap<>();
+    private final Map<UUID, BossBar> aimBars = new HashMap<>();
     private final Map<UUID, Player> overlayPlayers = new HashMap<>();
     private final Set<UUID> packReady = new HashSet<>();
 
@@ -51,6 +60,22 @@ public final class LockHudService {
         this.serviceTick = serviceTick;
         shooterStates.clear();
         targetThreats.clear();
+        aimDisplays.clear();
+    }
+
+    public void reportAim(Player shooter, boolean targetPresent, double progress,
+                          boolean locked, double screenX, double screenY) {
+        if (shooter == null || !shooter.isOnline()) {
+            return;
+        }
+        aimDisplays.put(shooter.getUniqueId(), new AimDisplay(
+                shooter, targetPresent, clamp(progress, 0.0, 1.0), locked,
+                clamp(screenX, -1.0, 1.0), clamp(screenY, -1.0, 1.0)));
+    }
+
+    public void clearAim(UUID shooterId) {
+        aimDisplays.remove(shooterId);
+        removeBar(aimBars, shooterId);
     }
 
     public void reportOutbound(Player shooter) {
@@ -93,13 +118,16 @@ public final class LockHudService {
             clearOverlays();
             clearBars(shooterBars);
             clearBars(targetBars);
+            clearBars(aimBars);
             nextWarningTick.clear();
             return;
         }
 
         Set<UUID> pixelPlayers = renderPixelOverlays(settings);
+        Set<UUID> aiming = renderAimHud(settings, pixelPlayers);
         Set<UUID> activeShooters = renderShooterHud(settings, pixelPlayers);
         Set<UUID> threatened = renderThreatHudAndAudio(settings, pixelPlayers);
+        removeStaleBars(aimBars, aiming);
         removeStaleBars(shooterBars, activeShooters);
         removeStaleBars(targetBars, threatened);
         pruneWarnings(targetThreats.keySet());
@@ -152,16 +180,21 @@ public final class LockHudService {
         nextWarningTick.remove(playerId);
         packReady.remove(playerId);
         overlayPlayers.remove(playerId);
+        telemetryStates.remove(playerId);
         removeBar(shooterBars, playerId);
         removeBar(targetBars, playerId);
+        removeBar(aimBars, playerId);
     }
 
     public void shutdown() {
         clearOverlays();
         clearBars(shooterBars);
         clearBars(targetBars);
+        clearBars(aimBars);
         shooterStates.clear();
         targetThreats.clear();
+        aimDisplays.clear();
+        telemetryStates.clear();
         nextWarningTick.clear();
         packReady.clear();
     }
@@ -172,33 +205,89 @@ public final class LockHudService {
             return Set.of();
         }
 
+        Set<UUID> candidates = new HashSet<>(shooterStates.keySet());
+        candidates.addAll(targetThreats.keySet());
+        candidates.addAll(aimDisplays.keySet());
         Set<UUID> active = new HashSet<>();
-        // Incoming-threat symbology has priority when a player is both shooter and target.
-        for (Map.Entry<UUID, TargetThreat> entry : targetThreats.entrySet()) {
-            UUID playerId = entry.getKey();
-            TargetThreat threat = entry.getValue();
-            if (!packReady.contains(playerId) || !threat.target.isOnline()) {
+        for (UUID playerId : candidates) {
+            ShooterState shooter = shooterStates.get(playerId);
+            TargetThreat threat = targetThreats.get(playerId);
+            AimDisplay aim = aimDisplays.get(playerId);
+            Player player = threat != null ? threat.target : shooter != null ? shooter.player : aim.shooter;
+            if (!packReady.contains(playerId) || !player.isOnline()) {
                 continue;
             }
-            Location eye = threat.target.getEyeLocation();
-            int sector = HudFormat.directionSector(
-                    eye.getYaw(), eye.getX(), eye.getZ(), threat.arrowX, threat.arrowZ);
-            double proximity = HudFormat.proximity(threat.distance, settings.lockRetentionRange());
-            showGlyph(threat.target, HudFormat.threatGlyph(sector, proximity));
-            active.add(playerId);
-        }
 
-        for (Map.Entry<UUID, ShooterState> entry : shooterStates.entrySet()) {
-            UUID playerId = entry.getKey();
-            ShooterState state = entry.getValue();
-            if (active.contains(playerId) || !packReady.contains(playerId) || !state.player.isOnline()) {
-                continue;
+            Location eye = player.getEyeLocation();
+            Vector velocity = player.getVelocity();
+            double clearance = groundClearance(player);
+            TelemetryState telemetry = telemetryStates.computeIfAbsent(playerId,
+                    ignored -> new TelemetryState());
+            telemetry.update(eye.getYaw(), eye.getPitch(), velocity.length() * 20.0,
+                    eye.getY(), clearance);
+            char threatLayer = 0;
+            if (threat != null) {
+                int sector = HudFormat.directionSector(
+                        eye.getYaw(), eye.getX(), eye.getZ(), threat.arrowX, threat.arrowZ);
+                double proximity = HudFormat.proximity(threat.distance, settings.lockRetentionRange());
+                threatLayer = HudFormat.threatGlyph(sector, proximity);
             }
-            showGlyph(state.player, HudFormat.shooterGlyph(state.active));
+            char lockMarker = aim != null && aim.targetPresent
+                    ? HudFormat.lockMarkerGlyph(aim.screenX, aim.screenY, aim.locked)
+                    : 0;
+            char lockProgress = aim == null
+                    ? 0
+                    : HudFormat.lockProgressGlyph(aim.progress, aim.locked);
+
+            String overlay = HudFormat.composeLayers(
+                    HudFormat.baseGlyph(),
+                    HudFormat.headingGlyph((float) telemetry.yaw),
+                    HudFormat.pitchGlyph((float) telemetry.pitch),
+                    HudFormat.progradeGlyph((float) telemetry.yaw, (float) telemetry.pitch,
+                            velocity.getX(), velocity.getY(), velocity.getZ()),
+                    HudFormat.speedGlyph(telemetry.speed),
+                    HudFormat.altitudeGlyph(telemetry.altitude),
+                    HudFormat.heightGlyph(telemetry.clearance),
+                    HudFormat.weaponGlyph(shooter == null ? 0 : shooter.active),
+                    lockMarker,
+                    lockProgress,
+                    threatLayer);
+            showOverlay(player, overlay);
             active.add(playerId);
         }
 
         removeStaleOverlays(active);
+        return active;
+    }
+
+    private Set<UUID> renderAimHud(PluginSettings settings, Set<UUID> pixelPlayers) {
+        if (!settings.shooterBossBar()) {
+            clearBars(aimBars);
+            return Set.of();
+        }
+
+        Set<UUID> active = new HashSet<>();
+        for (Map.Entry<UUID, AimDisplay> entry : aimDisplays.entrySet()) {
+            AimDisplay aim = entry.getValue();
+            if (pixelPlayers.contains(entry.getKey()) || !aim.shooter.isOnline()) {
+                continue;
+            }
+            active.add(entry.getKey());
+            BossBar bar = aimBars.computeIfAbsent(entry.getKey(), ignored ->
+                    Bukkit.createBossBar("", BarColor.BLUE, BarStyle.SEGMENTED_20));
+            attach(bar, aim.shooter);
+            if (aim.locked) {
+                bar.setTitle("§a◆  LOCK  §f松弦发射");
+                bar.setProgress(1.0);
+            } else if (aim.targetPresent) {
+                bar.setTitle("§e◇  手动标定  §f" + Math.round(aim.progress * 100.0) + "%");
+                bar.setProgress(aim.progress);
+            } else {
+                bar.setTitle("§e◇  将目标保持在准星内");
+                bar.setProgress(0.0);
+            }
+            bar.setVisible(true);
+        }
         return active;
     }
 
@@ -278,19 +367,85 @@ public final class LockHudService {
             cue.add(towardThreat.normalize().multiply(4.0));
         }
 
-        float sensorVolume = (float) (0.35 + proximity * 0.45);
-        float sensorPitch = (float) (0.62 + proximity * 0.68);
-        target.playSound(cue, Sound.BLOCK_SCULK_SENSOR_CLICKING, sensorVolume, sensorPitch);
-        if (proximity >= 0.65) {
-            target.playSound(cue, Sound.ENTITY_WARDEN_HEARTBEAT,
-                    (float) (0.25 + proximity * 0.35),
-                    (float) (0.82 + proximity * 0.28));
+        if (hasCustomAudio(target)) {
+            String event = proximity >= 0.65 ? SOUND_MISSILE_CRITICAL : SOUND_MISSILE_WARNING;
+            target.playSound(cue, event, SoundCategory.PLAYERS,
+                    (float) (0.55 + proximity * 0.35),
+                    (float) (0.92 + proximity * 0.16));
+        } else {
+            float sensorVolume = (float) (0.35 + proximity * 0.45);
+            float sensorPitch = (float) (0.62 + proximity * 0.68);
+            target.playSound(cue, Sound.BLOCK_SCULK_SENSOR_CLICKING, sensorVolume, sensorPitch);
+            if (proximity >= 0.65) {
+                target.playSound(cue, Sound.ENTITY_WARDEN_HEARTBEAT,
+                        (float) (0.25 + proximity * 0.35),
+                        (float) (0.82 + proximity * 0.28));
+            }
         }
         nextWarningTick.put(id, serviceTick + interval);
     }
 
-    private void showGlyph(Player player, char glyph) {
-        player.sendActionBar(Component.text(String.valueOf(glyph)).font(HUD_FONT));
+    public void playLockSounds(Player shooter, Player target) {
+        if (shooter != null && shooter.isOnline()) {
+            if (hasCustomAudio(shooter)) {
+                shooter.playSound(shooter.getLocation(), SOUND_LOCK_CONFIRM,
+                        SoundCategory.PLAYERS, 0.82f, 1.0f);
+            } else {
+                shooter.playSound(shooter.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 0.55f, 1.45f);
+                shooter.playSound(shooter.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.35f, 1.8f);
+            }
+        }
+        if (hasCustomAudio(target)) {
+            target.playSound(target.getLocation(), SOUND_MISSILE_WARNING,
+                    SoundCategory.PLAYERS, 0.85f, 0.88f);
+        } else {
+            target.playSound(target.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 0.75f, 0.65f);
+            target.playSound(target.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, 0.6f, 1.05f);
+        }
+    }
+
+    public void playManualLockCue(Player shooter) {
+        if (shooter == null || !shooter.isOnline()) {
+            return;
+        }
+        if (hasCustomAudio(shooter)) {
+            shooter.playSound(shooter.getLocation(), SOUND_LOCK_CONFIRM,
+                    SoundCategory.PLAYERS, 0.82f, 1.0f);
+        } else {
+            shooter.playSound(shooter.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 0.55f, 1.45f);
+            shooter.playSound(shooter.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.35f, 1.8f);
+        }
+    }
+
+    public void playLaunchCue(Player shooter) {
+        if (shooter != null && shooter.isOnline() && hasCustomAudio(shooter)) {
+            shooter.playSound(shooter.getLocation(), SOUND_LAUNCH,
+                    SoundCategory.PLAYERS, 0.76f, 1.0f);
+        }
+    }
+
+    private boolean hasCustomAudio(Player player) {
+        PluginSettings settings = settingsManager.current();
+        return player != null && settings.hudEnabled() && settings.pixelHudEnabled()
+                && packReady.contains(player.getUniqueId());
+    }
+
+    private static double groundClearance(Player player) {
+        try {
+            Location location = player.getLocation();
+            World world = player.getWorld();
+            int blockX = (int) Math.floor(location.getX());
+            int blockZ = (int) Math.floor(location.getZ());
+            int surfaceY = world.getHighestBlockYAt(blockX, blockZ);
+            return Math.max(0.0, location.getY() - (surfaceY + 1.0));
+        } catch (RuntimeException ignored) {
+            // Height telemetry must never interrupt the guidance scheduler.
+            return 0.0;
+        }
+    }
+
+    private void showOverlay(Player player, String glyphs) {
+        player.sendActionBar(Component.text(glyphs).font(HUD_FONT));
         overlayPlayers.put(player.getUniqueId(), player);
     }
 
@@ -304,6 +459,7 @@ public final class LockHudService {
             if (entry.getValue().isOnline()) {
                 entry.getValue().sendActionBar(Component.empty());
             }
+            telemetryStates.remove(entry.getKey());
             iterator.remove();
         }
     }
@@ -315,6 +471,7 @@ public final class LockHudService {
             }
         }
         overlayPlayers.clear();
+        telemetryStates.clear();
     }
 
     private static byte[] decodeSha1(String value) {
@@ -372,6 +529,15 @@ public final class LockHudService {
         nextWarningTick.keySet().removeIf(id -> !threatened.contains(id));
     }
 
+    private static double clamp(double value, double min, double max) {
+        double safe = Double.isFinite(value) ? value : min;
+        return Math.max(min, Math.min(max, safe));
+    }
+
+    private static double wrapDegrees(double value) {
+        return ((value + 180.0) % 360.0 + 360.0) % 360.0 - 180.0;
+    }
+
     private static final class ShooterState {
         final Player player;
         final int active;
@@ -398,6 +564,53 @@ public final class LockHudService {
             this.arrowX = arrowX;
             this.arrowY = arrowY;
             this.arrowZ = arrowZ;
+        }
+    }
+
+    private static final class AimDisplay {
+        final Player shooter;
+        final boolean targetPresent;
+        final double progress;
+        final boolean locked;
+        final double screenX;
+        final double screenY;
+
+        AimDisplay(Player shooter, boolean targetPresent, double progress,
+                   boolean locked, double screenX, double screenY) {
+            this.shooter = shooter;
+            this.targetPresent = targetPresent;
+            this.progress = progress;
+            this.locked = locked;
+            this.screenX = screenX;
+            this.screenY = screenY;
+        }
+    }
+
+    private static final class TelemetryState {
+        private static final double SMOOTHING = 0.32;
+        boolean initialized;
+        double yaw;
+        double pitch;
+        double speed;
+        double altitude;
+        double clearance;
+
+        void update(double nextYaw, double nextPitch, double nextSpeed,
+                    double nextAltitude, double nextClearance) {
+            if (!initialized) {
+                initialized = true;
+                yaw = nextYaw;
+                pitch = nextPitch;
+                speed = nextSpeed;
+                altitude = nextAltitude;
+                clearance = nextClearance;
+                return;
+            }
+            yaw += wrapDegrees(nextYaw - yaw) * SMOOTHING;
+            pitch += (nextPitch - pitch) * SMOOTHING;
+            speed += (nextSpeed - speed) * SMOOTHING;
+            altitude += (nextAltitude - altitude) * SMOOTHING;
+            clearance += (nextClearance - clearance) * SMOOTHING;
         }
     }
 }

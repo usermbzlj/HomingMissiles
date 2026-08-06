@@ -15,7 +15,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 public final class SettingsManager {
-    public static final int CONFIG_VERSION = 5;
+    public static final int CONFIG_VERSION = 6;
     public static final int HARD_MAX_TRACKED_PER_PLAYER = 4;
 
     private static final Map<String, Tunable> TUNABLES;
@@ -37,6 +37,8 @@ public final class SettingsManager {
         register(tunables, new Tunable("lead", "tracking.lead-ticks", 4.0, 0.0, 40.0, "目标预判tick"));
         register(tunables, new Tunable("max-lead", "tracking.max-lead-ticks", 24.0, 0.0, 100.0, "最大截击预判tick"));
         register(tunables, new Tunable("switch-advantage", "tracking.switch-advantage-blocks", 3.0, 0.0, 64.0, "切换目标所需距离优势"));
+        register(tunables, new Tunable("lock-time", "targeting.manual-lock.duration-ticks", 16.0, 1.0, 100.0, "手动锁定时长（tick）"));
+        register(tunables, new Tunable("lock-cone", "targeting.manual-lock.cone-degrees", 10.0, 1.0, 45.0, "手动锁定视锥半角（度）"));
         TUNABLES = Collections.unmodifiableMap(tunables);
 
         Map<String, Preset> presets = new LinkedHashMap<>();
@@ -104,6 +106,20 @@ public final class SettingsManager {
         if (maxLeadTicks < leadTicks) {
             warnings.add("tracking.max-lead-ticks 小于基础预判，已在内存中提升为 " + leadTicks);
             maxLeadTicks = leadTicks;
+        }
+
+        int manualLockDuration = boundedInt(
+                c, "targeting.manual-lock.duration-ticks", 16, 1, 100, warnings);
+        int manualLockGrace = boundedInt(
+                c, "targeting.manual-lock.break-grace-ticks", 4, 0, 20, warnings);
+        double manualLockCone = boundedDouble(
+                c, "targeting.manual-lock.cone-degrees", 10.0, 1.0, 45.0, warnings);
+        double manualLockBreakCone = boundedDouble(
+                c, "targeting.manual-lock.break-cone-degrees", 16.0, 1.0, 60.0, warnings);
+        if (manualLockBreakCone < manualLockCone) {
+            warnings.add("targeting.manual-lock.break-cone-degrees 小于锁定视锥，已在内存中提升为 "
+                    + manualLockCone);
+            manualLockBreakCone = manualLockCone;
         }
 
         int globalLimit = boundedInt(c, "limits.max-tracked-arrows", 128, 1, 10000, warnings);
@@ -190,6 +206,10 @@ public final class SettingsManager {
                 c.getBoolean("tracking.target-spectator", false),
                 c.getBoolean("tracking.respect-vanish", true),
                 c.getBoolean("tracking.no-gravity", true),
+                manualLockDuration,
+                manualLockGrace,
+                manualLockCone,
+                manualLockBreakCone,
                 globalLimit,
                 perPlayerLimit,
                 cooldown,
@@ -217,7 +237,7 @@ public final class SettingsManager {
                 resourcePackUrl,
                 resourcePackSha1,
                 c.getBoolean("hud.resource-pack.required", false),
-                color(c.getString("hud.resource-pack.prompt", "&b启用像素化导弹头显")),
+                color(c.getString("hud.resource-pack.prompt", "&b启用动态飞行导弹头显与座舱音效")),
                 c.getBoolean("hud.resource-pack.assume-server-pack-provides-hud", false),
                 selfHostEnabled,
                 selfHostBind,
@@ -445,6 +465,7 @@ public final class SettingsManager {
         m.put("rejected-player-limit", "&e你已有 {active}/{limit} 支制导箭在途。");
         m.put("rejected-cooldown", "&e制导弓冷却中，还需 {ticks} tick。");
         m.put("rejected-world", "&e当前世界已禁用制导弓。");
+        m.put("rejected-manual-lock", "&c未完成手动锁定。&7拉住弓并把目标保持在锁定框内。");
         m.put("give-sender", "&a已给予 &f{player} &a制导弓 ×{amount}。{dropped}");
         m.put("give-target", "&a你获得了制导弓 ×{amount}。");
         m.put("clear", "&a已清除 &f{count} &a支在途制导箭。");

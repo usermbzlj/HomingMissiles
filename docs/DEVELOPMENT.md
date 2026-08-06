@@ -46,7 +46,9 @@ mvn clean package
 Copy-Item .\target\HomingMissiles-3.0.0.jar C:\path\to\dev-server\plugins\ -Force
 ```
 
-Maven 的 `package` 阶段还会以无界面 Java AWT 执行 `tools/HudPackBuilder.java`，在 `target/hud-packs/` 生成 1.21.4/1.21.11 两个确定性资源包、SHA-1 旁车文件和预览 PNG。字体或纹理改动必须同时检查 ZIP 内容、哈希和预览图。
+Maven 的 `package` 阶段还会以无界面 Java AWT 执行 `tools/HudPackBuilder.java`，在 `target/hud-packs/` 生成 1.21.4/1.21.11 两个确定性资源包、SHA-1 旁车文件和预览 PNG。构建器生成 535 个有效可叠加位图字形（含细粒度仪表、标定框与进度），并把 `src/main/hud/audio/` 的两条定制合成音、两条 CC0 衍生警报、来源 NOTICE 与 `sounds.json` 一起封装。字体、纹理或声音改动必须同时检查 ZIP 内容、哈希和预览图。
+
+如需重建音频，先安装带 `libvorbis` 的 FFmpeg，再执行 `powershell -ExecutionPolicy Bypass -File .\tools\build-hud-audio.ps1`。脚本会确定性合成发射/锁定反馈，核对两条 vendored CC0 警报源的 SHA-256，再完成裁剪、滤波、淡化、响度规整和高质量 OGG 编码。普通 Maven 构建直接封装已生成的 OGG，不依赖 FFmpeg。
 
 修改 Linux 替换脚本后，在 WSL/Linux 执行 `bash tools/test-replacement-script.sh`。测试在 `/tmp` 创建隔离的伪服务器，并覆盖首次安装、重复运行、配置保留和注入故障后的精确回滚。
 
@@ -149,7 +151,7 @@ clearWhere
 成本大致随以下因素增长：
 
 ```text
-在途箭数量 × 可见目标候选数量 × 目标检查成本
+拉弓玩家数量 × 同世界玩家数量 + 在途箭数量 × 已绑定目标验证成本
 ```
 
 高成本选项：
@@ -173,7 +175,7 @@ clearWhere
 3. 降低索敌范围；
 4. 降低全服箭数上限；
 5. 用 spark 分析主线程热点；
-6. 避免在目标选择循环中分配大量临时对象。
+6. 避免在手动标定候选循环中分配大量临时对象。
 
 ## 9. 日志与错误编号
 

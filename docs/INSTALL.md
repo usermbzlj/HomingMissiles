@@ -89,7 +89,7 @@ bash replace-homingmissiles-3.0.0.sh \
 发布 JAR 的固定校验值：
 
 ```text
-SHA-256  fa090d31cd93dcd44c47a3937d65167e921d73f87538dceafb42ec26bc1f1fb6
+SHA-256  510ceb41aca22e7f0acede692715668266e5a51ea6037f8bdf28be91850ef624
 ```
 
 服务器由面板而不是独立 systemd 单元管理时，脚本会在发现运行中的 Java 进程后安全退出。先通过面板完整停服，再使用：
@@ -151,7 +151,7 @@ Copy-Item .\target\HomingMissiles-3.0.0.jar C:\path\to\server\plugins\ -Force
 /hbow get
 ```
 
-随后在 `plugins/HomingMissiles/config.yml` 补齐 `hud.resource-pack.url` 与 `.sha1`，执行 `/hbow reload` 并让测试玩家重新连接。替换脚本有意保留旧配置，因此从 4 版升级时这一步不会被脚本代替。
+随后在 `plugins/HomingMissiles/config.yml` 补齐 `targeting.manual-lock.*`、`hud.resource-pack.url` 与 `.sha1`，执行 `/hbow reload` 并让测试玩家重新连接。替换脚本有意保留旧配置，因此升级时这一步不会被脚本代替。
 
 ## 升级
 
@@ -164,6 +164,8 @@ Copy-Item .\target\HomingMissiles-3.0.0.jar C:\path\to\server\plugins\ -Force
 7. 不要同时启用旧命令方块制导系统。
 
 从配置版本 4 升至 5 时必须手工迁移 `tracking.lock-retention-range`、`tracking.terminal-boost.*`、`tracking.max-lead-ticks` 与 `hud.resource-pack.*`。缺失字段会使用内存默认值，不会导致停服，但旧 YAML 不会被静默改写。
+
+从配置版本 5 升至 6 时新增 `targeting.manual-lock.duration-ticks`、`cone-degrees`、`break-cone-degrees` 与 `break-grace-ticks`。6 版发射行为改为强制手动标定，`tracking.dynamic-retargeting` 和 `switch-advantage-blocks` 仅保留兼容读取。旧文件缺字段时会采用 16 tick、10°/16° 与 4 tick 容错的内存默认值，但仍建议显式迁移后再上线。
 
 ## 常见问题
 
