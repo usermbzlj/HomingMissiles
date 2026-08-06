@@ -11,6 +11,7 @@
 ### Native HUD and telemetry privacy
 
 - Added deterministic 1.21.4 and 1.21.11 bitmap-font resource packs for a real pixel-art helmet-mounted display; the ActionBar carries one private glyph instead of a textual imitation.
+- Added an optional in-process HUD pack HTTP endpoint with an exact path, GET/HEAD allowlist, startup SHA-1 verification and an immutable in-memory payload.
 - Shooter HMD exposes only a reticle and four outbound hardpoints; target identity, distance, direction and speed remain private.
 - Target HMD exposes eight coarse directions and three urgency bands. BossBars remain only as an unavailable/declined-pack fallback.
 - `/hbow inspect` self-service no longer leaks target telemetry.
@@ -24,6 +25,8 @@
 ### Effects and audio
 
 - Rebuilt launch, powered-flight, lock, impact and self-destruct effects around an exhaust flame, white-smoke wake, lock flash, shockwave and layered blast.
+- Fixed Paper/Leaf 1.21.11 `FLASH` particles by supplying their required `Color` data; effect API failures now disable only the affected stage instead of deleting missiles or interrupting bow events.
+- Preserved legacy boolean feedback settings (`false`/`true`) as aliases for `off`/the default mode during 3.0 configuration upgrades.
 - Removed target-head marker particles.
 - Replaced note-block beeps with layered firework/crossbow/beacon/sculk/warden cues and spatialized the recurring warning toward the nearest threat.
 - Bumped configuration to version 5.

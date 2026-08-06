@@ -22,6 +22,14 @@ Copy-Item .\tools\upload-config.example.properties .\tools\upload-config.propert
 Copy-Item .\tools\deploy-config.example.properties .\tools\deploy-config.properties
 ```
 
+若希望以后不再输入 SSH 密码，只需运行一次：
+
+```powershell
+.\tools\setup-server-ssh.cmd
+```
+
+该工具读取本地上传配置，生成专用密钥，提示一次现有服务器密码以安装公钥，验证免密登录，并自动写入 `identity_file` 与 `batch_mode=true`。它不会获得 root 权限，也不会部署插件。
+
 在上传配置中填写 `remote_host`、`remote_user`、`port`、`remote_directory` 和可选的 `identity_file`；在部署配置中填写 `server_dir`、`service` 与 `startup_timeout`。仓库中的示例配置只包含通用占位值。上传器会把 `deploy-config.properties` 随发布包传到远端，root 替换脚本自动读取它。
 
 上传内容包括插件 JAR、root 替换脚本、`SHA256SUMS.txt`、Leaf 1.21.11 HUD ZIP 及 SHA-1。上传器会执行本地哈希和 JAR 结构检查，仅传输一个临时 ZIP，然后通过 SSH 在远端隔离解压、二次校验并逐文件原子落位；它不会停服或运行 root 部署。
@@ -81,7 +89,7 @@ bash replace-homingmissiles-3.0.0.sh \
 发布 JAR 的固定校验值：
 
 ```text
-SHA-256  26a477b0e1087f4d95a503a27ae99f9a4284d2fb44fa76739d9db8e69fe90906
+SHA-256  fa090d31cd93dcd44c47a3937d65167e921d73f87538dceafb42ec26bc1f1fb6
 ```
 
 服务器由面板而不是独立 systemd 单元管理时，脚本会在发现运行中的 Java 进程后安全退出。先通过面板完整停服，再使用：

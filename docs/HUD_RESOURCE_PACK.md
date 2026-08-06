@@ -60,6 +60,26 @@ hud:
 
 这个开关表示插件相信当前全服包已经包含 HUD；若实际没有合并，客户端会显示缺字方框。
 
+## 插件内置托管（可选）
+
+没有现成 HTTP 文件服务时，可以把 Leaf 1.21.11 ZIP 放到
+`plugins/HomingMissiles/hud/HomingMissiles-HUD-1.21.11.zip`，并启用内置的最小 HTTP 端点：
+
+```yaml
+hud:
+  resource-pack:
+    url: 'http://你的公网主机:25568/homingmissiles/hud-1.21.11.zip'
+    sha1: 'edcfb113244acb76099699c831fff495874ab909'
+    self-host:
+      enabled: true
+      bind-address: '0.0.0.0'
+      port: 25568
+      path: '/homingmissiles/hud-1.21.11.zip'
+```
+
+该服务只暴露配置中的单一 ZIP 路径，只接受 GET/HEAD；启动前会把 ZIP 读入内存并核对 SHA-1。
+它提供普通 HTTP，不负责 TLS、域名、端口映射或防火墙。务必从服务器外部实际下载并复核 SHA-1，才能确认玩家客户端可达。
+
 ## 验收
 
 1. 发射者看到青色中央准星和最多 4 个挂点占用，不出现目标名、距离、方向或速度。
