@@ -3,10 +3,10 @@
 # 速度单位为“方块/tick”；正常服务器每秒20 tick。
 # 修改后可执行 /hbow reload。在线调参可使用 /hbow tune。
 
-config-version: 5
+config-version: 6
 
 tracking:
-  # 首次捕获只在近圈发生，避免导弹凭空误锁非常远的新目标。
+  # 拉弓标定只在近圈发生，避免误锁非常远的玩家。
   range: 80.0
 
   # 一旦建立锁定，当前目标可在更大的保持圈内继续被追踪。
@@ -41,10 +41,10 @@ tracking:
   # 动态截击解允许的最大预判时间；无可行截击解时向该上限提前瞄准。
   max-lead-ticks: 24.0
 
-  # true：允许飞行中切换到明显更近的目标。
-  dynamic-retargeting: true
+  # 6版起制导箭只追踪发射前手动标定的目标；保留此键仅用于旧配置兼容。
+  dynamic-retargeting: false
 
-  # 新目标至少要比当前目标近多少格才切换，防止目标接近时来回抖动。
+  # 6版不再使用；保留旧值，便于旧配置被安全读取。
   switch-advantage-blocks: 3.0
 
   # true：目标与箭之间被方块遮挡时不锁定。会增加计算成本。
@@ -58,6 +58,16 @@ tracking:
 
   # true：关闭箭重力；仍保留原版碰撞和伤害。
   no-gravity: true
+
+targeting:
+  manual-lock:
+    # 必须拉住弓，把一名有效玩家持续保持在中央锁定视锥内，完成后松弦才会发射。
+    duration-ticks: 16
+    # 新目标进入此半角范围才开始标定。10度约为中央准星周围的小视野。
+    cone-degrees: 10.0
+    # 已锁目标可在更大的视锥内短暂保持，避免轻微手抖立即断锁。
+    break-cone-degrees: 16.0
+    break-grace-ticks: 4
 
 limits:
   # 全服务器同时在途的制导箭上限。
@@ -104,9 +114,9 @@ feedback:
   lock-target: off
   rejection: actionbar
 
-# 飞机头戴显示器风格的像素 HUD / 空间化来袭警报。
-# pixel-overlay 需要本项目生成的 HUD 资源包；加载成功后 ActionBar 只承载一枚图形字形，
-# 画面内容来自 PNG 像素纹理而不是文字。BossBar 仅在资源包未就绪时降级使用。
+# FlightHud 风格的动态分层像素 HUD / 空间化来袭警报。
+# pixel-overlay 需要本项目生成的 HUD 资源包；加载成功后 ActionBar 承载带负间距的图形图层流，
+# 动态组合航向、速度、高度、离地高度、俯仰梯、飞行矢量、挂点与威胁层。BossBar 仅在资源包未就绪时降级使用。
 hud:
   enabled: true
   pixel-overlay: true
@@ -118,7 +128,7 @@ hud:
     # 填写对应 HUD ZIP 的 SHA-1（不是插件 JAR 的 SHA-256）。
     sha1: ''
     required: false
-    prompt: '&b启用像素化导弹头显'
+    prompt: '&b启用动态飞行导弹头显与座舱音效'
     # 若你已把 homingmissiles:hud 合并进 server.properties 的全服资源包，可设为 true。
     assume-server-pack-provides-hud: false
     # 可选：由插件进程直接提供上面的 ZIP。默认关闭，不会额外监听端口。
@@ -129,7 +139,7 @@ hud:
       port: 25568
       path: '/homingmissiles/hud-1.21.11.zip'
   warning-audio: true
-  # 来袭声从导弹方向空间化播放，距离越近节奏越紧；单位 tick（20 tick = 1秒）。
+  # 资源包就绪时使用原创座舱告警音；否则回退到原版音效。来袭声从导弹方向播放，距离越近节奏越紧。
   warning-min-interval-ticks: 4
   warning-max-interval-ticks: 24
 
@@ -153,9 +163,10 @@ commands:
 item:
   name: '&b&l制导弓'
   lore:
+    - '&7拉弓瞄准并完成手动锁定后才能发射'
     - '&7高伤害制导武器 · 四联数据链'
     - '&7目标遥测对发射者保密'
-    - '&7目标失效后动态重选 · 真实Motion转向'
+    - '&7锁定目标唯一绑定 · 真实Motion转向'
     - '&8每人最多 4 枚在途弹药'
   enchantments:
     # 各项均可独立关闭；默认开启。
@@ -188,6 +199,7 @@ messages:
   rejected-player-limit: '&e你已有 {active}/{limit} 支制导箭在途。'
   rejected-cooldown: '&e制导弓冷却中，还需 {ticks} tick。'
   rejected-world: '&e当前世界已禁用制导弓。'
+  rejected-manual-lock: '&c未完成手动锁定。&7拉住弓并把目标保持在锁定框内。'
 
   give-sender: '&a已给予 &f{player} &a制导弓 ×{amount}。{dropped}'
   give-target: '&a你获得了制导弓 ×{amount}。'

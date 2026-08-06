@@ -35,7 +35,7 @@ public final class HomingMissilesPlugin extends JavaPlugin {
         messages = new MessageService(settingsManager);
         bowFactory = new HomingBowFactory(this, settingsManager);
         LockHudService lockHud = new LockHudService(settingsManager);
-        homingService = new HomingService(this, settingsManager, messages, lockHud);
+        homingService = new HomingService(this, settingsManager, messages, bowFactory, lockHud);
 
         getServer().getPluginManager().registerEvents(
                 new HomingListener(settingsManager, messages, bowFactory, homingService), this);

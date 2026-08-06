@@ -4,13 +4,20 @@
 
 ### Combat model
 
+- Added a mandatory draw-to-lock gate: the shooter must hold an eligible player inside the configurable acquisition cone before releasing; an unlocked release is always cancelled.
+- Bound every missile to the manually selected target UUID, persisted that UUID across chunk/server recovery, and removed post-launch automatic retargeting.
 - Changed the default from dense salvos to high damage: 12 minimum arrow damage and a strict four-missile per-player in-flight cap.
 - The four-missile cap cannot be bypassed by administrator permissions.
 - Added independently configurable Flame, Infinity, Unbreaking/unbreakable and Power enchantments; all are enabled by default on newly issued bows.
 
 ### Native HUD and telemetry privacy
 
-- Added deterministic 1.21.4 and 1.21.11 bitmap-font resource packs for a real pixel-art helmet-mounted display; the ActionBar carries one private glyph instead of a textual imitation.
+- Rebuilt the HUD around a FlightHud-inspired layered flight-instrument layout: heading tape, pitch ladder/artificial horizon, prograde vector, speed, altitude, height-above-ground, hardpoints and incoming-threat overlays.
+- Expanded the deterministic bitmap atlas from 28 monolithic states to 535 effective composable layers, including 49-position acquisition/lock boxes and 18 progress states.
+- Added per-tick interpolation for flight telemetry and target-screen coordinates, while reducing heading/pitch/speed/altitude bucket steps to eliminate abrupt full-frame texture changes.
+- Rebuilt launch and lock confirmation as deterministic 48 kHz synthesis tailored to Minecraft's compact, dry feedback palette: launch layers a string/mechanical snap, low ignition body and filtered exhaust; lock uses four ascending percussive harmonic notes with a short resolved tail.
+- Kept the Joth/yd CC0 incoming-warning clips, removed the rejected external launch/lock sources, and documented the complete FFmpeg synthesis recipe for reproducible tuning.
+- No audio or visual assets were extracted from Ace Combat 7; clients without the pack retain the vanilla-sound fallback.
 - Added an optional in-process HUD pack HTTP endpoint with an exact path, GET/HEAD allowlist, startup SHA-1 verification and an immutable in-memory payload.
 - Shooter HMD exposes only a reticle and four outbound hardpoints; target identity, distance, direction and speed remain private.
 - Target HMD exposes eight coarse directions and three urgency bands. BossBars remain only as an unavailable/declined-pack fallback.
@@ -29,7 +36,7 @@
 - Preserved legacy boolean feedback settings (`false`/`true`) as aliases for `off`/the default mode during 3.0 configuration upgrades.
 - Removed target-head marker particles.
 - Replaced note-block beeps with layered firework/crossbow/beacon/sculk/warden cues and spatialized the recurring warning toward the nearest threat.
-- Bumped configuration to version 5.
+- Bumped configuration to version 6.
 
 ### Release engineering
 

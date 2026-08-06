@@ -116,6 +116,8 @@
 - `lead`
 - `max-lead`
 - `switch-advantage`
+- `lock-time`
+- `lock-cone`
 
 ### `/hbow tune reset <参数>`
 

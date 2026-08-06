@@ -3,6 +3,7 @@ package cn.yjj.homingmissiles.service;
 import cn.yjj.homingmissiles.HomingMissilesPlugin;
 import cn.yjj.homingmissiles.config.PluginSettings;
 import cn.yjj.homingmissiles.config.SettingsManager;
+import cn.yjj.homingmissiles.item.HomingBowFactory;
 import cn.yjj.homingmissiles.model.TrackedArrow;
 import cn.yjj.homingmissiles.util.GuidanceMath;
 import cn.yjj.homingmissiles.util.MessageService;
@@ -43,6 +44,7 @@ public final class HomingService {
     private final SettingsManager settingsManager;
     private final MessageService messages;
     private final LockHudService lockHud;
+    private final ManualLockService manualLocks;
     private final Map<UUID, TrackedArrow> tracked = new LinkedHashMap<>();
     private final Map<UUID, Integer> shooterCounts = new HashMap<>();
     private final Map<UUID, Long> lastLaunchTick = new HashMap<>();
@@ -51,6 +53,7 @@ public final class HomingService {
     private final NamespacedKey projectileKey;
     private final NamespacedKey shooterKey;
     private final NamespacedKey ageKey;
+    private final NamespacedKey targetKey;
     private final NamespacedKey sessionKey;
     private final String sessionId = UUID.randomUUID().toString();
 
@@ -63,14 +66,17 @@ public final class HomingService {
     private double peakTickMillis;
 
     public HomingService(HomingMissilesPlugin plugin, SettingsManager settingsManager,
-                         MessageService messages, LockHudService lockHud) {
+                         MessageService messages, HomingBowFactory bowFactory,
+                         LockHudService lockHud) {
         this.plugin = plugin;
         this.settingsManager = settingsManager;
         this.messages = messages;
         this.lockHud = lockHud;
+        this.manualLocks = new ManualLockService(settingsManager, bowFactory, lockHud);
         this.projectileKey = new NamespacedKey(plugin, "homing_projectile");
         this.shooterKey = new NamespacedKey(plugin, "shooter_uuid");
         this.ageKey = new NamespacedKey(plugin, "age_ticks");
+        this.targetKey = new NamespacedKey(plugin, "target_uuid");
         this.sessionKey = new NamespacedKey(plugin, "session_id");
     }
 
@@ -102,6 +108,7 @@ public final class HomingService {
         tracked.clear();
         shooterCounts.clear();
         lastLaunchTick.clear();
+        manualLocks.clear();
         lockHud.shutdown();
     }
 
@@ -138,21 +145,26 @@ public final class HomingService {
                 continue;
             }
             String rawShooter = pdc.get(shooterKey, PersistentDataType.STRING);
+            String rawTarget = pdc.get(targetKey, PersistentDataType.STRING);
             Integer age = pdc.get(ageKey, PersistentDataType.INTEGER);
             try {
                 UUID shooterId = UUID.fromString(rawShooter == null ? "" : rawShooter);
+                UUID targetId = UUID.fromString(rawTarget == null ? "" : rawTarget);
                 if (tracked.size() >= settings.maxTrackedArrows()
                         || activeCount(shooterId) >= settings.maxTrackedPerPlayer()) {
                     clearPersistentState(arrow);
                     arrow.setGravity(true);
                     continue;
                 }
-                addState(new TrackedArrow(arrow, shooterId, age == null ? 0 : age));
+                TrackedArrow state = new TrackedArrow(arrow, shooterId, age == null ? 0 : age);
+                state.targetId(targetId);
+                addState(state);
                 applyArrowProperties(arrow);
                 recovered++;
             } catch (IllegalArgumentException ex) {
                 clearPersistentState(arrow);
-                plugin.getLogger().warning("忽略射手UUID损坏的遗留制导箭：" + arrow.getUniqueId());
+                arrow.setGravity(true);
+                plugin.getLogger().warning("忽略射手或目标 UUID 损坏的遗留制导箭：" + arrow.getUniqueId());
             }
         }
         return recovered;
@@ -177,6 +189,7 @@ public final class HomingService {
 
     public void forgetPlayer(UUID playerId) {
         lastLaunchTick.remove(playerId);
+        manualLocks.forgetPlayer(playerId);
         lockHud.forgetPlayer(playerId);
     }
 
@@ -199,6 +212,9 @@ public final class HomingService {
         if (isWorldDisabled(arrow.getWorld())) {
             return TrackResult.rejected(RejectReason.WORLD_DISABLED, 0);
         }
+        if (manualLocks.lockedTarget(shooter) == null) {
+            return TrackResult.rejected(RejectReason.MANUAL_LOCK_REQUIRED, 0);
+        }
 
         boolean bypass = shooter.hasPermission("homingmissiles.bypass.limits");
         if (!bypass && tracked.size() >= settings.maxTrackedArrows()) {
@@ -220,13 +236,19 @@ public final class HomingService {
             }
         }
 
+        Player target = manualLocks.consumeLockedTarget(shooter);
+        if (target == null) {
+            return TrackResult.rejected(RejectReason.MANUAL_LOCK_REQUIRED, 0);
+        }
+
         applyArrowProperties(arrow);
         TrackedArrow state = new TrackedArrow(arrow, shooter.getUniqueId(), 0);
+        state.targetId(target.getUniqueId());
         addState(state);
         persistState(state);
         lastLaunchTick.put(shooter.getUniqueId(), serviceTick);
 
-        runEffectSafely("launch", () -> spawnLaunchEffects(arrow));
+        runEffectSafely("launch", () -> spawnLaunchEffects(arrow, shooter));
         messages.feedback(shooter, settings.launchFeedback(), "launch",
                 "active", activeCount(shooter.getUniqueId()),
                 "limit", settings.maxTrackedPerPlayer());
@@ -320,6 +342,7 @@ public final class HomingService {
         int processed = 0;
         enforcePerPlayerLimit();
         lockHud.beginTick(serviceTick);
+        manualLocks.tick(plugin.getServer().getOnlinePlayers(), serviceTick);
 
         Iterator<Map.Entry<UUID, TrackedArrow>> iterator = tracked.entrySet().iterator();
         while (iterator.hasNext()) {
@@ -408,7 +431,6 @@ public final class HomingService {
 
         Player target = selectTarget(state, arrow);
         if (target == null) {
-            state.targetId(null);
             state.lockNotifiedTarget(null);
             state.clearLockObservation();
             runEffectSafely("search", () -> spawnSearchEffect(arrow, state));
@@ -432,39 +454,12 @@ public final class HomingService {
         PluginSettings settings = settingsManager.current();
         World world = arrow.getWorld();
         Location arrowLocation = arrow.getLocation();
-        double acquisitionRangeSquared = settings.trackingRange() * settings.trackingRange();
         double retentionRangeSquared = settings.lockRetentionRange() * settings.lockRetentionRange();
 
         Player current = state.targetId() == null ? null : plugin.getServer().getPlayer(state.targetId());
-        boolean currentValid = isValidTarget(
-                current, state, world, arrowLocation, retentionRangeSquared, arrow);
-
-        Player nearest = null;
-        double nearestDistanceSquared = acquisitionRangeSquared;
-        for (Player candidate : world.getPlayers()) {
-            if (!isValidTarget(candidate, state, world, arrowLocation, acquisitionRangeSquared, arrow)) {
-                continue;
-            }
-            double distanceSquared = candidate.getEyeLocation().distanceSquared(arrowLocation);
-            if (distanceSquared < nearestDistanceSquared) {
-                nearestDistanceSquared = distanceSquared;
-                nearest = candidate;
-            }
-        }
-
-        if (!settings.dynamicRetargeting()) {
-            return currentValid ? current : nearest;
-        }
-        if (!currentValid || nearest == null || current == null) {
-            return nearest;
-        }
-        if (nearest.getUniqueId().equals(current.getUniqueId())) {
-            return current;
-        }
-
-        double currentDistance = Math.sqrt(current.getEyeLocation().distanceSquared(arrowLocation));
-        double nearestDistance = Math.sqrt(nearestDistanceSquared);
-        return nearestDistance + settings.switchAdvantageBlocks() < currentDistance ? nearest : current;
+        return isValidTarget(current, state, world, arrowLocation, retentionRangeSquared, arrow)
+                ? current
+                : null;
     }
 
     private boolean isValidTarget(Player player, TrackedArrow state, World world,
@@ -552,7 +547,7 @@ public final class HomingService {
         PluginSettings settings = settingsManager.current();
         Player shooter = plugin.getServer().getPlayer(state.shooterId());
         if (settings.lockSounds()) {
-            runEffectSafely("lock-audio", () -> playLockSounds(shooter, target));
+            runEffectSafely("lock-audio", () -> lockHud.playLockSounds(shooter, target));
         }
 
         if (shooter != null && shooter.isOnline()) {
@@ -564,15 +559,6 @@ public final class HomingService {
         if (settings.particles()) {
             runEffectSafely("lock-particle", () -> spawnLockParticle(state.arrow()));
         }
-    }
-
-    private void playLockSounds(Player shooter, Player target) {
-        if (shooter != null && shooter.isOnline()) {
-            shooter.playSound(shooter.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 0.55f, 1.45f);
-            shooter.playSound(shooter.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.35f, 1.8f);
-        }
-        target.playSound(target.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 0.75f, 0.65f);
-        target.playSound(target.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, 0.6f, 1.05f);
     }
 
     private static void spawnLockParticle(AbstractArrow arrow) {
@@ -593,7 +579,7 @@ public final class HomingService {
         world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_LARGE_BLAST, 0.85f, 0.68f);
     }
 
-    private void spawnLaunchEffects(AbstractArrow arrow) {
+    private void spawnLaunchEffects(AbstractArrow arrow, Player shooter) {
         PluginSettings settings = settingsManager.current();
         Location loc = exhaustLocation(arrow, 0.2);
         World world = arrow.getWorld();
@@ -605,6 +591,7 @@ public final class HomingService {
         if (settings.launchSound()) {
             world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_SHOOT, 0.9f, 0.72f);
             world.playSound(loc, Sound.ITEM_CROSSBOW_SHOOT, 0.55f, 0.55f);
+            lockHud.playLaunchCue(shooter);
         }
     }
 
@@ -708,6 +695,11 @@ public final class HomingService {
         pdc.set(projectileKey, PersistentDataType.BYTE, (byte) 1);
         pdc.set(shooterKey, PersistentDataType.STRING, state.shooterId().toString());
         pdc.set(ageKey, PersistentDataType.INTEGER, state.ageTicks());
+        if (state.targetId() == null) {
+            pdc.remove(targetKey);
+        } else {
+            pdc.set(targetKey, PersistentDataType.STRING, state.targetId().toString());
+        }
         pdc.set(sessionKey, PersistentDataType.STRING, sessionId);
     }
 
@@ -716,6 +708,7 @@ public final class HomingService {
         pdc.remove(projectileKey);
         pdc.remove(shooterKey);
         pdc.remove(ageKey);
+        pdc.remove(targetKey);
         pdc.remove(sessionKey);
     }
 
@@ -769,7 +762,8 @@ public final class HomingService {
         GLOBAL_LIMIT,
         PLAYER_LIMIT,
         COOLDOWN,
-        WORLD_DISABLED
+        WORLD_DISABLED,
+        MANUAL_LOCK_REQUIRED
     }
 
     public record TrackResult(boolean accepted, RejectReason reason, int remainingTicks) {
