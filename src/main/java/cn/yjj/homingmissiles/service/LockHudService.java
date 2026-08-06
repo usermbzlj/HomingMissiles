@@ -5,8 +5,10 @@ import cn.yjj.homingmissiles.config.SettingsManager;
 import cn.yjj.homingmissiles.util.HudFormat;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.SoundCategory;
 import org.bukkit.World;
@@ -15,8 +17,13 @@ import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerResourcePackStatusEvent;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.messaging.PluginMessageListener;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 
+import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -25,20 +32,29 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Aggregates guidance state into a resource-pack-backed pixel HMD. The ActionBar
- * carries one private-use glyph whose pixels come from homingmissiles:hud; it is
- * not a textual telemetry line. BossBars are used only when the pack is not ready.
+ * Aggregates guidance state for either the Fabric renderer or a resource-pack-backed
+ * centered Title HMD. BossBars are used only when neither graphical path is ready.
  * Shooter symbology exposes channel occupancy only, never target telemetry.
  */
-public final class LockHudService {
+public final class LockHudService implements PluginMessageListener {
     public static final UUID HUD_PACK_ID = UUID.fromString("4b388bf5-7ba1-4d5e-97e8-fb1f38d3a300");
-    private static final Key HUD_FONT = Key.key("homingmissiles", "hud");
+    public static final String CONTROL_CHANNEL = "homingmissiles:control";
+    public static final String STATE_CHANNEL = "homingmissiles:hud_state";
+    private static final byte PROTOCOL_VERSION = 1;
+    private static final byte CONTROL_HELLO = 1;
+    private static final byte CONTROL_SET_HUD = 2;
+    private static final byte CONTROL_TOGGLE_HUD = 3;
+    private static final Key HUD_TITLE_FONT = Key.key("homingmissiles", "hud_title");
+    private static final Title.Times HUD_TITLE_TIMES = Title.Times.times(
+            Duration.ZERO, Duration.ofMillis(150), Duration.ZERO);
     private static final String SOUND_LOCK_CONFIRM = "homingmissiles:hud.lock_confirm";
     private static final String SOUND_MISSILE_WARNING = "homingmissiles:hud.missile_warning";
     private static final String SOUND_MISSILE_CRITICAL = "homingmissiles:hud.missile_critical";
     private static final String SOUND_LAUNCH = "homingmissiles:hud.launch";
 
+    private final JavaPlugin plugin;
     private final SettingsManager settingsManager;
+    private final NamespacedKey hudPreferenceKey;
 
     private long serviceTick;
     private final Map<UUID, ShooterState> shooterStates = new HashMap<>();
@@ -51,9 +67,16 @@ public final class LockHudService {
     private final Map<UUID, BossBar> aimBars = new HashMap<>();
     private final Map<UUID, Player> overlayPlayers = new HashMap<>();
     private final Set<UUID> packReady = new HashSet<>();
+    private final Set<UUID> modClients = new HashSet<>();
+    private final Set<UUID> recommendationSent = new HashSet<>();
+    private final Map<UUID, PendingFallback> pendingFallbacks = new HashMap<>();
 
-    public LockHudService(SettingsManager settingsManager) {
+    public LockHudService(JavaPlugin plugin, SettingsManager settingsManager) {
+        this.plugin = plugin;
         this.settingsManager = settingsManager;
+        this.hudPreferenceKey = new NamespacedKey(plugin, "hud_enabled");
+        plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, CONTROL_CHANNEL, this);
+        plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, STATE_CHANNEL);
     }
 
     public void beginTick(long serviceTick) {
@@ -114,6 +137,9 @@ public final class LockHudService {
 
     public void endTick() {
         PluginSettings settings = settingsManager.current();
+        // Push the disabled bit before clearing server-side overlays so Mod
+        // clients can fade immediately instead of waiting for their timeout.
+        sendClientStates(settings);
         if (!settings.hudEnabled()) {
             clearOverlays();
             clearBars(shooterBars);
@@ -123,10 +149,13 @@ public final class LockHudService {
             return;
         }
 
+        processPendingFallbacks(settings);
         Set<UUID> pixelPlayers = renderPixelOverlays(settings);
-        Set<UUID> aiming = renderAimHud(settings, pixelPlayers);
-        Set<UUID> activeShooters = renderShooterHud(settings, pixelPlayers);
-        Set<UUID> threatened = renderThreatHudAndAudio(settings, pixelPlayers);
+        Set<UUID> nativeHudPlayers = new HashSet<>(pixelPlayers);
+        nativeHudPlayers.addAll(modClients);
+        Set<UUID> aiming = renderAimHud(nativeHudPlayers);
+        Set<UUID> activeShooters = renderShooterHud(settings, nativeHudPlayers);
+        Set<UUID> threatened = renderThreatHudAndAudio(settings, nativeHudPlayers);
         removeStaleBars(aimBars, aiming);
         removeStaleBars(shooterBars, activeShooters);
         removeStaleBars(targetBars, threatened);
@@ -141,14 +170,27 @@ public final class LockHudService {
         player.removeResourcePack(HUD_PACK_ID);
         PluginSettings settings = settingsManager.current();
         if (!settings.hudEnabled() || !settings.pixelHudEnabled()) {
+            pendingFallbacks.remove(playerId);
             return;
         }
+        if (modClients.contains(playerId)) {
+            pendingFallbacks.remove(playerId);
+            return;
+        }
+        pendingFallbacks.put(playerId, new PendingFallback(
+                player, serviceTick + settings.hudClientModDetectionTicks()));
+    }
+
+    private void enableServerFallback(Player player, PluginSettings settings) {
+        UUID playerId = player.getUniqueId();
         if (settings.assumeServerPackProvidesHud()) {
             packReady.add(playerId);
+            recommendClientMod(player, settings);
             return;
         }
         String url = settings.hudResourcePackUrl();
         if (url.isBlank()) {
+            recommendClientMod(player, settings);
             return;
         }
 
@@ -159,6 +201,7 @@ public final class LockHudService {
                 sha1,
                 settings.hudResourcePackPrompt(),
                 settings.hudResourcePackRequired());
+        recommendClientMod(player, settings);
     }
 
     public void handleResourcePackStatus(PlayerResourcePackStatusEvent event) {
@@ -181,6 +224,9 @@ public final class LockHudService {
         packReady.remove(playerId);
         overlayPlayers.remove(playerId);
         telemetryStates.remove(playerId);
+        modClients.remove(playerId);
+        pendingFallbacks.remove(playerId);
+        recommendationSent.remove(playerId);
         removeBar(shooterBars, playerId);
         removeBar(targetBars, playerId);
         removeBar(aimBars, playerId);
@@ -197,6 +243,166 @@ public final class LockHudService {
         telemetryStates.clear();
         nextWarningTick.clear();
         packReady.clear();
+        modClients.clear();
+        pendingFallbacks.clear();
+        recommendationSent.clear();
+        plugin.getServer().getMessenger().unregisterIncomingPluginChannel(plugin, CONTROL_CHANNEL, this);
+        plugin.getServer().getMessenger().unregisterOutgoingPluginChannel(plugin, STATE_CHANNEL);
+    }
+
+    public boolean isPlayerHudEnabled(Player player) {
+        Byte stored = player.getPersistentDataContainer().get(hudPreferenceKey, PersistentDataType.BYTE);
+        return stored == null || stored != 0;
+    }
+
+    public boolean setPlayerHudEnabled(Player player, boolean enabled) {
+        player.getPersistentDataContainer().set(
+                hudPreferenceKey, PersistentDataType.BYTE, enabled ? (byte) 1 : (byte) 0);
+        if (!enabled) {
+            clearFullHud(player.getUniqueId());
+        }
+        sendClientState(player, settingsManager.current());
+        return enabled;
+    }
+
+    public boolean togglePlayerHud(Player player) {
+        return setPlayerHudEnabled(player, !isPlayerHudEnabled(player));
+    }
+
+    public boolean hasClientMod(Player player) {
+        return modClients.contains(player.getUniqueId());
+    }
+
+    public String deliveryMode(Player player) {
+        if (hasClientMod(player)) {
+            return "Fabric 客户端 Mod（逐帧精确居中）";
+        }
+        if (packReady.contains(player.getUniqueId())) {
+            return "纯服务端资源包 HUD";
+        }
+        return pendingFallbacks.containsKey(player.getUniqueId()) ? "正在检测客户端 Mod" : "纯服务端 BossBar 降级";
+    }
+
+    @Override
+    public void onPluginMessageReceived(String channel, Player player, byte[] message) {
+        if (!CONTROL_CHANNEL.equals(channel) || player == null || message == null || message.length < 2
+                || message[0] != PROTOCOL_VERSION) {
+            return;
+        }
+        switch (message[1]) {
+            case CONTROL_HELLO -> {
+                UUID playerId = player.getUniqueId();
+                modClients.add(playerId);
+                pendingFallbacks.remove(playerId);
+                packReady.remove(playerId);
+                player.removeResourcePack(HUD_PACK_ID);
+                clearFullHud(playerId);
+                sendClientState(player, settingsManager.current());
+                player.sendMessage("§8[§b制导箭§8] §a已检测到客户端 HUD Mod，已启用逐帧精确居中模式。§7按 H 可开关完整 HUD。");
+            }
+            case CONTROL_SET_HUD -> {
+                if (message.length >= 3) {
+                    boolean enabled = setPlayerHudEnabled(player, message[2] != 0);
+                    sendHudPreferenceMessage(player, enabled);
+                }
+            }
+            case CONTROL_TOGGLE_HUD -> sendHudPreferenceMessage(player, togglePlayerHud(player));
+            default -> {
+                // Ignore future protocol operations for forward compatibility.
+            }
+        }
+    }
+
+    private void processPendingFallbacks(PluginSettings settings) {
+        Iterator<Map.Entry<UUID, PendingFallback>> iterator = pendingFallbacks.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, PendingFallback> entry = iterator.next();
+            PendingFallback pending = entry.getValue();
+            if (modClients.contains(entry.getKey()) || !pending.player.isOnline()) {
+                iterator.remove();
+                continue;
+            }
+            if (serviceTick < pending.deadlineTick) {
+                continue;
+            }
+            iterator.remove();
+            enableServerFallback(pending.player, settings);
+        }
+    }
+
+    private void recommendClientMod(Player player, PluginSettings settings) {
+        if (!recommendationSent.add(player.getUniqueId())) {
+            return;
+        }
+        String url = settings.hudClientModDownloadUrl();
+        String suffix = url.isBlank() ? "" : " §f" + url;
+        player.sendMessage("§8[§b制导箭§8] §e推荐安装 HomingMissiles HUD Fabric Mod："
+                + "§7可获得与准星严格同心、逐帧平滑的飞行 HUD。" + suffix);
+        player.sendMessage("§8[§b制导箭§8] §7未安装也可正常使用；当前自动采用纯服务端 HUD。"
+                + " §f/hbow hud §7可开关完整 HUD，锁定进度不会被关闭。");
+    }
+
+    private void sendHudPreferenceMessage(Player player, boolean enabled) {
+        player.sendMessage("§8[§b制导箭§8] " + (enabled
+                ? "§a完整飞行 HUD 已开启。"
+                : "§e完整飞行 HUD 已关闭；手动锁定进度仍会显示。"));
+    }
+
+    private void sendClientStates(PluginSettings settings) {
+        for (UUID playerId : Set.copyOf(modClients)) {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player == null || !player.isOnline()) {
+                modClients.remove(playerId);
+                continue;
+            }
+            sendClientState(player, settings);
+        }
+    }
+
+    private void sendClientState(Player player, PluginSettings settings) {
+        if (!modClients.contains(player.getUniqueId()) || !player.isOnline()) {
+            return;
+        }
+        UUID playerId = player.getUniqueId();
+        AimDisplay aim = aimDisplays.get(playerId);
+        ShooterState shooter = shooterStates.get(playerId);
+        TargetThreat threat = targetThreats.get(playerId);
+        int flags = 0;
+        if (settings.hudEnabled()) flags |= 1;
+        if (isPlayerHudEnabled(player)) flags |= 1 << 1;
+        if (player.isGliding()) flags |= 1 << 2;
+        if (aim != null) flags |= 1 << 3;
+        if (aim != null && aim.targetPresent) flags |= 1 << 4;
+        if (aim != null && aim.locked) flags |= 1 << 5;
+        if (threat != null) flags |= 1 << 6;
+
+        float proximity = threat == null ? 0.0f
+                : (float) HudFormat.proximity(threat.distance, settings.lockRetentionRange());
+        int sector = threat == null ? 0 : HudFormat.directionSector(
+                player.getEyeLocation().getYaw(),
+                player.getLocation().getX(), player.getLocation().getZ(),
+                threat.arrowX, threat.arrowZ);
+        ByteBuffer payload = ByteBuffer.allocate(22);
+        payload.put(PROTOCOL_VERSION);
+        payload.putShort((short) flags);
+        payload.putFloat(aim == null ? 0.0f : (float) aim.progress);
+        payload.putFloat(aim == null ? 0.0f : (float) aim.screenX);
+        payload.putFloat(aim == null ? 0.0f : (float) aim.screenY);
+        payload.put((byte) Math.min(255, shooter == null ? 0 : shooter.active));
+        payload.put((byte) Math.min(255, threat == null ? 0 : threat.count));
+        payload.putFloat(proximity);
+        payload.put((byte) sector);
+        player.sendPluginMessage(plugin, STATE_CHANNEL, payload.array());
+    }
+
+    private void clearFullHud(UUID playerId) {
+        Player overlayPlayer = overlayPlayers.remove(playerId);
+        if (overlayPlayer != null && overlayPlayer.isOnline()) {
+            overlayPlayer.clearTitle();
+        }
+        telemetryStates.remove(playerId);
+        removeBar(shooterBars, playerId);
+        removeBar(targetBars, playerId);
     }
 
     private Set<UUID> renderPixelOverlays(PluginSettings settings) {
@@ -208,13 +414,28 @@ public final class LockHudService {
         Set<UUID> candidates = new HashSet<>(shooterStates.keySet());
         candidates.addAll(targetThreats.keySet());
         candidates.addAll(aimDisplays.keySet());
+        for (Player online : plugin.getServer().getOnlinePlayers()) {
+            if (online.isGliding() && isPlayerHudEnabled(online)) {
+                candidates.add(online.getUniqueId());
+            }
+        }
         Set<UUID> active = new HashSet<>();
         for (UUID playerId : candidates) {
+            if (modClients.contains(playerId)) {
+                continue;
+            }
             ShooterState shooter = shooterStates.get(playerId);
             TargetThreat threat = targetThreats.get(playerId);
             AimDisplay aim = aimDisplays.get(playerId);
-            Player player = threat != null ? threat.target : shooter != null ? shooter.player : aim.shooter;
-            if (!packReady.contains(playerId) || !player.isOnline()) {
+            Player player = threat != null ? threat.target
+                    : shooter != null ? shooter.player
+                    : aim != null ? aim.shooter : plugin.getServer().getPlayer(playerId);
+            if (!packReady.contains(playerId) || player == null || !player.isOnline()) {
+                continue;
+            }
+
+            boolean full = isPlayerHudEnabled(player) && player.isGliding();
+            if (!full && aim == null) {
                 continue;
             }
 
@@ -240,15 +461,15 @@ public final class LockHudService {
                     : HudFormat.lockProgressGlyph(aim.progress, aim.locked);
 
             String overlay = HudFormat.composeLayers(
-                    HudFormat.baseGlyph(),
-                    HudFormat.headingGlyph((float) telemetry.yaw),
-                    HudFormat.pitchGlyph((float) telemetry.pitch),
-                    HudFormat.progradeGlyph((float) telemetry.yaw, (float) telemetry.pitch,
-                            velocity.getX(), velocity.getY(), velocity.getZ()),
-                    HudFormat.speedGlyph(telemetry.speed),
-                    HudFormat.altitudeGlyph(telemetry.altitude),
-                    HudFormat.heightGlyph(telemetry.clearance),
-                    HudFormat.weaponGlyph(shooter == null ? 0 : shooter.active),
+                    full ? HudFormat.baseGlyph() : 0,
+                    full ? HudFormat.headingGlyph((float) telemetry.yaw) : 0,
+                    full ? HudFormat.pitchGlyph((float) telemetry.pitch) : 0,
+                    full ? HudFormat.progradeGlyph((float) telemetry.yaw, (float) telemetry.pitch,
+                            velocity.getX(), velocity.getY(), velocity.getZ()) : 0,
+                    full ? HudFormat.speedGlyph(telemetry.speed) : 0,
+                    full ? HudFormat.altitudeGlyph(telemetry.altitude) : 0,
+                    full ? HudFormat.heightGlyph(telemetry.clearance) : 0,
+                    full ? HudFormat.weaponGlyph(shooter == null ? 0 : shooter.active) : 0,
                     lockMarker,
                     lockProgress,
                     threatLayer);
@@ -260,12 +481,7 @@ public final class LockHudService {
         return active;
     }
 
-    private Set<UUID> renderAimHud(PluginSettings settings, Set<UUID> pixelPlayers) {
-        if (!settings.shooterBossBar()) {
-            clearBars(aimBars);
-            return Set.of();
-        }
-
+    private Set<UUID> renderAimHud(Set<UUID> pixelPlayers) {
         Set<UUID> active = new HashSet<>();
         for (Map.Entry<UUID, AimDisplay> entry : aimDisplays.entrySet()) {
             AimDisplay aim = entry.getValue();
@@ -300,7 +516,8 @@ public final class LockHudService {
         Set<UUID> active = new HashSet<>();
         for (Map.Entry<UUID, ShooterState> entry : shooterStates.entrySet()) {
             ShooterState state = entry.getValue();
-            if (pixelPlayers.contains(entry.getKey()) || !state.player.isOnline()) {
+            if (pixelPlayers.contains(entry.getKey()) || !state.player.isOnline()
+                    || !isPlayerHudEnabled(state.player)) {
                 continue;
             }
             active.add(entry.getKey());
@@ -324,7 +541,8 @@ public final class LockHudService {
                 continue;
             }
 
-            if (settings.targetBossBar() && !pixelPlayers.contains(entry.getKey())) {
+            if (settings.targetBossBar() && !pixelPlayers.contains(entry.getKey())
+                    && isPlayerHudEnabled(target)) {
                 threatenedWithBars.add(entry.getKey());
                 BossBar bar = targetBars.computeIfAbsent(entry.getKey(), ignored ->
                         Bukkit.createBossBar("", BarColor.RED, BarStyle.SEGMENTED_20));
@@ -427,7 +645,7 @@ public final class LockHudService {
     private boolean hasCustomAudio(Player player) {
         PluginSettings settings = settingsManager.current();
         return player != null && settings.hudEnabled() && settings.pixelHudEnabled()
-                && packReady.contains(player.getUniqueId());
+                && (packReady.contains(player.getUniqueId()) || modClients.contains(player.getUniqueId()));
     }
 
     private static double groundClearance(Player player) {
@@ -445,7 +663,8 @@ public final class LockHudService {
     }
 
     private void showOverlay(Player player, String glyphs) {
-        player.sendActionBar(Component.text(glyphs).font(HUD_FONT));
+        player.showTitle(Title.title(
+                Component.text(glyphs).font(HUD_TITLE_FONT), Component.empty(), HUD_TITLE_TIMES));
         overlayPlayers.put(player.getUniqueId(), player);
     }
 
@@ -457,7 +676,7 @@ public final class LockHudService {
                 continue;
             }
             if (entry.getValue().isOnline()) {
-                entry.getValue().sendActionBar(Component.empty());
+                entry.getValue().clearTitle();
             }
             telemetryStates.remove(entry.getKey());
             iterator.remove();
@@ -467,7 +686,7 @@ public final class LockHudService {
     private void clearOverlays() {
         for (Player player : overlayPlayers.values()) {
             if (player.isOnline()) {
-                player.sendActionBar(Component.empty());
+                player.clearTitle();
             }
         }
         overlayPlayers.clear();
@@ -545,6 +764,16 @@ public final class LockHudService {
         ShooterState(Player player, int active) {
             this.player = player;
             this.active = active;
+        }
+    }
+
+    private static final class PendingFallback {
+        final Player player;
+        final long deadlineTick;
+
+        PendingFallback(Player player, long deadlineTick) {
+            this.player = player;
+            this.deadlineTick = deadlineTick;
         }
     }
 

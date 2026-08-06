@@ -2,11 +2,13 @@ package org.bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.scheduler.BukkitScheduler;
+import org.bukkit.plugin.messaging.Messenger;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 public interface Server {
  PluginManager getPluginManager();
+ Messenger getMessenger();
  BukkitScheduler getScheduler();
  Player getPlayer(UUID id);
  Player getPlayerExact(String name);

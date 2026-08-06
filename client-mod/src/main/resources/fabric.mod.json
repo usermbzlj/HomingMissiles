@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "homingmissiles_hud",
+  "version": "${version}",
+  "name": "HomingMissiles HUD",
+  "description": "Client-side, per-frame centered flight and manual-lock HUD for the HomingMissiles Paper plugin.",
+  "authors": ["YJJ", "OpenAI"],
+  "contact": {
+    "sources": "https://github.com/usermbzlj/HomingMissiles"
+  },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["cn.yjj.homingmissiles.hud.HomingMissilesHudClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": ">=0.141.6+1.21.11"
+  }
+}

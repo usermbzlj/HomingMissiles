@@ -1,6 +1,6 @@
 # 配置参考
 
-当前配置版本为 `6`。执行 `/hbow reload` 会校验并原子替换内存设置，不会覆盖原文件。
+当前配置版本为 `7`。执行 `/hbow reload` 会校验并原子替换内存设置，不会覆盖原文件。
 
 ## tracking
 
@@ -87,10 +87,12 @@ item:
 
 ## hud
 
-HUD 的主路径是项目自带资源包中的 `homingmissiles:hud` 位图字体：插件向 ActionBar 发送由私有字形与负间距组成的图层流，客户端把透明 PNG 叠成动态头戴显示器。飞行遥测先逐 tick 插值，再映射到 5° 航向、5° 俯仰、2 格/秒速度和 4 格高度档；标定框位置本身也经过插值，因此不会再整幅贴图生硬跳变。资源包没有就绪时才使用 BossBar 降级。
+HUD 有两条自动选择的路径。Fabric 客户端 Mod 登录时握手，插件检测到后发送每 tick 武器状态，由 Mod 按实际 GUI 宽高逐帧渲染严格同心、平滑插值的 HUD。没有握手时，插件等待检测宽限期后才发送资源包，并通过居中 Title 字体显示固定尺寸像素 HUD；资源包没有就绪时使用 BossBar。
 
 - `enabled`：HUD 与来袭警报总开关。
 - `pixel-overlay`：资源包就绪时启用像素 HMD。
+- `client-mod.download-url`：未检测到 Mod 时向玩家推荐的 HTTP(S) 下载页；建议指向 GitHub Release。
+- `client-mod.detection-grace-ticks`：登录后等待 Mod 握手的 tick，默认 `40`；到期后才启用纯服务端方案。
 - `shooter-bossbar` / `target-bossbar`：资源包未加载时是否显示降级仪表。
 - `resource-pack.url`：玩家客户端可直接访问的 HUD ZIP HTTP(S) 地址。
 - `resource-pack.sha1`：对应 ZIP 的 40 位 SHA-1，用于完整性校验和客户端缓存。
@@ -99,7 +101,9 @@ HUD 的主路径是项目自带资源包中的 `homingmissiles:hud` 位图字体
 - `warning-audio`：从最接近导弹方向播放空间警报；资源包就绪时使用经剪辑的 CC0 普通/临界座舱音，未就绪时使用幽匿/心跳原版组合音。
 - `warning-min-interval-ticks` / `warning-max-interval-ticks`：终端阶段与远距阶段的警报间隔。
 
-所有获得像素 HUD 的战斗参与者都会看到航向滑尺、速度、高度、离地高度、俯仰梯、人工地平线和飞行矢量。拉弓射手额外看到随目标移动的标定框与 16 档进度，完成后显示绿色 `LOCK`；飞行阶段只显示 4 个挂点占用，不下发目标名、距离、方向或速度。被追踪者额外得到八个离散方向和远/中/近三级威胁图形。完整部署见 [HUD_RESOURCE_PACK.md](HUD_RESOURCE_PACK.md)。
+完整飞行 HUD 在玩家整个鞘翅飞行期间显示航向、速度、高度、离地高度、俯仰梯、人工地平线和飞行矢量。拉弓射手额外看到随目标移动的标定框与锁定进度，完成后显示绿色 `LOCK`；飞行阶段只显示 4 个挂点占用，不下发目标名、距离、方向或速度。被追踪者额外得到八个离散方向和远/中/近三级威胁图形。
+
+玩家偏好保存在玩家 PDC 的 `homingmissiles:hud_enabled`。`/hbow hud off` 只关闭完整飞行框架、遥测和威胁图形；拉弓手动锁定框与进度始终保留。客户端 Mod 的 H 键修改的是同一份服务端偏好。客户端安装见 [CLIENT_MOD.md](CLIENT_MOD.md)，纯服务端资源包部署见 [HUD_RESOURCE_PACK.md](HUD_RESOURCE_PACK.md)。
 
 ## worlds
 

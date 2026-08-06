@@ -79,13 +79,14 @@ public final class HudPackBuilder {
         BufferedImage atlas = buildAtlas();
         byte[] atlasPng = png(atlas);
         byte[] iconPng = png(buildIcon(atlas));
-        byte[] fontJson = fontJson().getBytes(StandardCharsets.UTF_8);
+        byte[] fontJson = fontJson(72, 96, -193).getBytes(StandardCharsets.UTF_8);
+        byte[] titleFontJson = fontJson(9, 24, -49).getBytes(StandardCharsets.UTF_8);
         Map<String, byte[]> audio = loadAudio();
 
         buildPack(output, "HomingMissiles-HUD-1.21.4.zip", packMetadataLegacy(),
-                atlasPng, iconPng, fontJson, audio);
+                atlasPng, iconPng, fontJson, titleFontJson, audio);
         buildPack(output, "HomingMissiles-HUD-1.21.11.zip", packMetadataModern(),
-                atlasPng, iconPng, fontJson, audio);
+                atlasPng, iconPng, fontJson, titleFontJson, audio);
         ImageIO.write(buildPreview(atlas), "PNG", output.resolve("HomingMissiles-HUD-preview.png").toFile());
     }
 
@@ -517,7 +518,7 @@ public final class HudPackBuilder {
                 null);
     }
 
-    private static String fontJson() {
+    private static String fontJson(int ascent, int height, int layerAdvance) {
         StringBuilder rows = new StringBuilder();
         for (int row = 0; row < ROWS; row++) {
             if (row > 0) {
@@ -530,9 +531,9 @@ public final class HudPackBuilder {
             rows.append('"');
         }
         return "{\"providers\":["
-                + "{\"type\":\"space\",\"advances\":{\"\\ue0ff\":-193}},"
+                + "{\"type\":\"space\",\"advances\":{\"\\ue0ff\":" + layerAdvance + "}},"
                 + "{\"type\":\"bitmap\",\"file\":\"homingmissiles:font/homingmissiles_hmd.png\","
-                + "\"ascent\":72,\"height\":96,\"chars\":[" + rows + "]}]}\n";
+                + "\"ascent\":" + ascent + ",\"height\":" + height + ",\"chars\":[" + rows + "]}]}\n";
     }
 
     private static Map<String, byte[]> loadAudio() throws IOException {
@@ -585,10 +586,11 @@ public final class HudPackBuilder {
     }
 
     private static void buildPack(Path output, String name, String metadata,
-                                  byte[] atlas, byte[] icon, byte[] font,
+                                  byte[] atlas, byte[] icon, byte[] font, byte[] titleFont,
                                   Map<String, byte[]> audio) throws Exception {
         Map<String, byte[]> entries = new TreeMap<>();
         entries.put("assets/homingmissiles/font/hud.json", font);
+        entries.put("assets/homingmissiles/font/hud_title.json", titleFont);
         entries.put("assets/homingmissiles/textures/font/homingmissiles_hmd.png", atlas);
         entries.put("assets/homingmissiles/sounds.json", soundsJson().getBytes(StandardCharsets.UTF_8));
         entries.put("assets/homingmissiles/sounds/NOTICE.txt", audioNotice().getBytes(StandardCharsets.UTF_8));

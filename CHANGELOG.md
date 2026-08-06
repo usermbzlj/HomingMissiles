@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.1.0 — 2026-08-07
+
+### Dual-path centered flight HUD
+
+- Added an optional Fabric 1.21.11 client Mod with per-frame vector rendering anchored to the exact scaled-GUI midpoint used by the crosshair.
+- Extended the full flight HUD across the entire Elytra flight instead of only bow draw/active missile states.
+- Added continuous interpolation and fade transitions for telemetry, flight-path marker, acquisition box, lock progress and visibility.
+- Added versioned plugin-message handshake/state channels; the Paper plugin detects the Mod and suppresses its resource-pack prompt automatically.
+- Delayed pure-server fallback until the configurable handshake grace expires, then recommends the Mod and uses a centered Title bitmap font or BossBar fallback.
+- Added persistent `/hbow hud on|off|toggle|status` and a synchronized client `H` key. Disabling the full HUD never hides mandatory manual-lock progress.
+- Bundled the legal project audio set in both the resource pack and client Mod.
+- Bumped configuration to version 7 with `hud.client-mod.download-url` and `detection-grace-ticks`.
+
 ## 3.0.0 — 2026-08-06
 
 ### Combat model

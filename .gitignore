@@ -1,6 +1,7 @@
 # Maven / local verification
 target/
 build/
+.gradle/
 
 # IDE
 .idea/

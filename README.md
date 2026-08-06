@@ -1,10 +1,10 @@
-# HomingMissiles 3.0.0
+# HomingMissiles 3.1.0
 
 面向 **Paper / Purpur / Leaf 1.21.x** 的高伤害连续物理制导弓插件。插件逐 tick 修改箭的真实速度向量，不传送箭实体，因此保留惯性、转弯半径、原版碰撞与伤害流程。每名玩家最多同时维持 4 枚在途导弹。
 
-玩家必须拉住制导弓，把视野内的一名有效玩家持续保持在标定框内，看到 `LOCK` 后才能松弦发射；未完成锁定会强制取消射击。导弹只追踪发射前手动标定的 UUID，不会在飞行中自动换人；锁定后进入独立的 192 格保持圈，以动态截击解持续预判目标。HUD 参考 FlightHud 的飞行仪表语言，由资源包动态叠加航向、速度、高度、离地高度、俯仰梯、人工地平线、飞行矢量、标定框、锁定进度、挂点与来袭方向，并使用逐 tick 插值和更细的量化档位平滑过渡。资源包同时携带为 Minecraft 短促、干燥反馈风格定制合成的发射/锁定音，以及 CC0 来袭警报；未加载时自动回退到原版声音与 BossBar。
+玩家必须拉住制导弓，把视野内的一名有效玩家持续保持在标定框内，看到 `LOCK` 后才能松弦发射；未完成锁定会强制取消射击。导弹只追踪发射前手动标定的 UUID，不会在飞行中自动换人；锁定后进入独立的 192 格保持圈，以动态截击解持续预判目标。HUD 参考 FlightHud 的实际中心计算和飞行仪表语言，同时提供 Fabric 客户端逐帧渲染与纯服务端资源包降级。插件自动检测 Mod；安装时获得与准星严格同心的连续矢量 HUD，未安装时仍有居中像素 HUD/BossBar。完整 HUD 覆盖整个鞘翅飞行，玩家可关闭，但手动锁定进度始终保留。
 
-> 当前发布线：`3.0.0`（手动标定 / 平滑像素 HMD，`config-version: 6`）
+> 当前发布线：`3.1.0`（双通道精确居中飞行 HUD，`config-version: 7`）
 > 编译 API：Paper API `1.21.11-R0.1-SNAPSHOT`
 > Java：21  
 > 源码仓库：https://github.com/usermbzlj/HomingMissiles  
@@ -31,36 +31,37 @@
 
 生产服推荐把插件和替换脚本上传到服务器；像素 HMD 资源包还需放到玩家能够访问的 HTTP(S) 地址：
 
-- `target/HomingMissiles-3.0.0.jar`
-- `tools/replace-homingmissiles-3.0.0.sh`
+- `target/HomingMissiles-3.1.0.jar`
+- `tools/replace-homingmissiles-3.1.0.sh`
 - `target/hud-packs/HomingMissiles-HUD-1.21.11.zip`（Leaf 1.21.11）
+- `client-mod/build/libs/HomingMissiles-HUD-Fabric-1.21.11-3.1.0.jar`（推荐给玩家）
 
 在 Windows 源码目录中执行一条命令即可上传完整发布包：
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\upload-homingmissiles-3.0.0.ps1"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\upload-homingmissiles-3.1.0.ps1"
 ```
 
-也可以直接运行 `tools\upload-homingmissiles-3.0.0.cmd`。连接信息来自不会提交到 Git 的 `tools/upload-config.properties`，Minecraft 目录与服务信息来自同样被忽略的 `tools/deploy-config.properties`；仓库只保留两个 `.example.properties` 通用模板。上传器会把发布文件和部署配置打成一次性传输包，在远端隔离解压、复核并逐文件原子落位。它不会停服或执行 root 安装。
+也可以直接运行 `tools\upload-homingmissiles-3.1.0.cmd`。连接信息来自不会提交到 Git 的 `tools/upload-config.properties`，Minecraft 目录与服务信息来自同样被忽略的 `tools/deploy-config.properties`；仓库只保留两个 `.example.properties` 通用模板。上传器会把发布文件和部署配置打成一次性传输包，在远端隔离解压、复核并逐文件原子落位。它不会停服或执行 root 安装。
 
 第一次配置免密 SSH 时只需运行 `tools\setup-server-ssh.cmd`；它会要求一次现有服务器密码，随后自动验证密钥并更新本地上传配置。
 
 上传成功后，上传器会打印 root 应执行的准确命令，例如：
 
 ```bash
-sudo bash /your/upload/directory/replace-homingmissiles-3.0.0.sh
+sudo bash /your/upload/directory/replace-homingmissiles-3.1.0.sh
 ```
 
 脚本默认读取同目录的 JAR 与 `deploy-config.properties`，并按配置中的服务器目录精确匹配唯一的 systemd 服务。命令行 `--jar`、`--config`、`--server-dir` 和 `--service` 可以覆盖配置。脚本会固定校验 JAR 的 SHA-256
-`510ceb41aca22e7f0acede692715668266e5a51ea6037f8bdf28be91850ef624`，自动停服、备份旧 JAR、原子替换、重启并验证插件启用；任一步失败都会尝试恢复旧 JAR 和原服务状态。现有 `plugins/HomingMissiles/config.yml` 不会被覆盖。
+`4b62bd567cd62f995a79d73568252dc6c8ea0c702767a79bbd6b39bd722d6a65`，自动停服、备份旧 JAR、原子替换、重启并验证插件启用；任一步失败都会尝试恢复旧 JAR 和原服务状态。现有 `plugins/HomingMissiles/config.yml` 不会被覆盖。
 
-如果不使用脚本，必须手工完成：完全停服、移走所有旧版 HomingMissiles JAR、放入 3.0.0 JAR、完整启动。不要使用 Minecraft 的 `/reload` 代替重启，也不要在 `plugins/` 中同时保留多个版本。
+如果不使用脚本，必须手工完成：完全停服、移走所有旧版 HomingMissiles JAR、放入 3.1.0 JAR、完整启动。不要使用 Minecraft 的 `/reload` 代替重启，也不要在 `plugins/` 中同时保留多个版本。
 
 在日志中确认：
 
 ```text
-[HomingMissiles] Enabling HomingMissiles v3.0.0
-[HomingMissiles] HomingMissiles 3.0.0 已启用
+[HomingMissiles] Enabling HomingMissiles v3.1.0
+[HomingMissiles] HomingMissiles 3.1.0 已启用
 ```
 
 进入游戏执行：
@@ -135,13 +136,13 @@ mvn -U clean package
 成功后发布产物位于：
 
 ```text
-target/HomingMissiles-3.0.0.jar
+target/HomingMissiles-3.1.0.jar
 target/hud-packs/HomingMissiles-HUD-1.21.4.zip
 target/hud-packs/HomingMissiles-HUD-1.21.11.zip
 target/hud-packs/HomingMissiles-HUD-preview.png
 ```
 
-`target/original-*.jar`、`build/classes/`、`build/stubs/` 都不是正式服务器插件产物。服务器中只应安装 `target/HomingMissiles-3.0.0.jar`。
+`target/original-*.jar`、`build/classes/`、`build/stubs/` 都不是正式服务器插件产物。服务器中只应安装 `target/HomingMissiles-3.1.0.jar`。
 
 跳过测试仅用于临时排查，不应作为发布流程：
 
@@ -277,14 +278,14 @@ dev-server/
 
 ```bash
 mvn clean package
-cp target/HomingMissiles-3.0.0.jar /path/to/dev-server/plugins/
+cp target/HomingMissiles-3.1.0.jar /path/to/dev-server/plugins/
 ```
 
 Windows PowerShell：
 
 ```powershell
 mvn clean package
-Copy-Item .\target\HomingMissiles-3.0.0.jar C:\path\to\dev-server\plugins\ -Force
+Copy-Item .\target\HomingMissiles-3.1.0.jar C:\path\to\dev-server\plugins\ -Force
 ```
 
 然后完整启动测试服。开发中不要依赖 `/reload`：
@@ -365,12 +366,13 @@ HomingMissilesPlugin/
 │  ├─ HudPackBuilder.java
 │  ├─ build-hud-audio.ps1
 │  ├─ test-replacement-script.sh
-│  ├─ replace-homingmissiles-3.0.0.sh
+│  ├─ replace-homingmissiles-3.1.0.sh
 │  ├─ deploy-config.example.properties
 │  ├─ upload-config.example.properties
 │  ├─ setup-server-ssh.ps1 / .cmd
-│  ├─ upload-homingmissiles-3.0.0.ps1
-│  └─ upload-homingmissiles-3.0.0.cmd
+│  ├─ upload-homingmissiles-3.1.0.ps1
+│  └─ upload-homingmissiles-3.1.0.cmd
+├─ client-mod/                 # Fabric 1.21.11 纯客户端逐帧 HUD
 └─ docs/
    ├─ INSTALL.md
    ├─ COMMANDS.md
@@ -392,7 +394,7 @@ HomingMissilesPlugin/
 | `HomingListener` | 连接 Bukkit 事件与领域服务 |
 | `HomingService` | 箭状态、目标选择、每 tick 制导、持久化恢复、限制和诊断 |
 | `ManualLockService` | 拉弓期间的视锥筛选、锁定进度/容错与单次目标消费 |
-| `LockHudService` | 发送/跟踪 HUD 资源包，平滑飞行遥测与标定框，组合分层 HMD，维护降级 BossBar，并选择 CC0/原版空间警报 |
+| `LockHudService` | 检测客户端 Mod、同步玩家 HUD 偏好/武器状态、延迟发送资源包、组合纯服务端居中 HMD、维护 BossBar 与空间警报 |
 | `TrackedArrow` | 单支在途箭的目标观测、拉远计数和后程点火状态 |
 | `HomingBowCommand` | 命令路由、权限、帮助、参数校验和 Tab 补全 |
 | `MessageService` | 消息模板、占位符、聊天与 Action Bar 输出 |
@@ -582,18 +584,20 @@ VectorMath.rotateTowards
 ## 配置、命令与权限
 
 - 完整命令：[`docs/COMMANDS.md`](docs/COMMANDS.md)
-- 完整配置：[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)（含手动标定、远距保持、后程加速、`hud.*` 与 `config-version: 6`）
+- 完整配置：[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md)（含手动标定、远距保持、后程加速、`hud.*` 与 `config-version: 7`）
+- Fabric 客户端 Mod：[`docs/CLIENT_MOD.md`](docs/CLIENT_MOD.md)
 - 像素 HUD 部署：[`docs/HUD_RESOURCE_PACK.md`](docs/HUD_RESOURCE_PACK.md)
 - 安装和排错：[`docs/INSTALL.md`](docs/INSTALL.md)
 - 开发工作流：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
 - 变更记录：[`CHANGELOG.md`](CHANGELOG.md)
 
-升级后，旧配置若仍为 `config-version: 2/3/4/5`，缺失字段会使用 6 版安全默认值并在重载时给出版本警告；文件不会被自动覆盖。6 版必须手动锁定才能发射，并新增 `targeting.manual-lock.*`。要启用像素 HMD，必须补齐 `hud.resource-pack.url` 与 `sha1`，或把资源合并进全服资源包后启用 `assume-server-pack-provides-hud`。
+升级后，旧配置缺失的新字段会使用 7 版安全默认值并在重载时给出版本警告；文件不会被自动覆盖。7 版新增 Mod 自动检测和个人 HUD 开关。要启用纯服务端像素 HMD，仍需补齐 `hud.resource-pack.url` 与 `sha1`，或把资源合并进全服资源包后启用 `assume-server-pack-provides-hud`。
 
 常用命令：
 
 ```text
 /hbow help
+/hbow hud [on|off|toggle|status]
 /hbow get [数量]
 /hbow give <玩家> [数量]
 /hbow status [verbose]
@@ -616,8 +620,8 @@ VectorMath.rotateTowards
 ```bash
 bash tools/verify-offline.sh
 mvn -U clean package
-jar tf target/HomingMissiles-3.0.0.jar
-sha256sum target/HomingMissiles-3.0.0.jar
+jar tf target/HomingMissiles-3.1.0.jar
+sha256sum target/HomingMissiles-3.1.0.jar
 sha1sum target/hud-packs/*.zip
 ```
 

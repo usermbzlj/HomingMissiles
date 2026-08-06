@@ -15,7 +15,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 public final class SettingsManager {
-    public static final int CONFIG_VERSION = 6;
+    public static final int CONFIG_VERSION = 7;
     public static final int HARD_MAX_TRACKED_PER_PLAYER = 4;
 
     private static final Map<String, Tunable> TUNABLES;
@@ -136,6 +136,14 @@ public final class SettingsManager {
             warningMax = warningMin;
         }
         int bowPowerLevel = boundedInt(c, "item.enchantments.power-level", 5, 0, 5, warnings);
+        int clientModDetectionTicks = boundedInt(c, "hud.client-mod.detection-grace-ticks", 40, 10, 200, warnings);
+        String clientModDownloadUrl = c.getString("hud.client-mod.download-url",
+                "https://github.com/usermbzlj/HomingMissiles/releases/tag/v3.1.0").trim();
+        if (!clientModDownloadUrl.isEmpty()
+                && (!isHttpUrl(clientModDownloadUrl) || !isAscii(clientModDownloadUrl))) {
+            warnings.add("hud.client-mod.download-url 必须是只含 ASCII 的 http/https URL，已忽略");
+            clientModDownloadUrl = "";
+        }
 
         String resourcePackUrl = c.getString("hud.resource-pack.url", "").trim();
         if (!resourcePackUrl.isEmpty() && (!isHttpUrl(resourcePackUrl) || !isAscii(resourcePackUrl))) {
@@ -232,6 +240,8 @@ public final class SettingsManager {
                 feedback(c, "feedback.rejection", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 c.getBoolean("hud.enabled", true),
                 c.getBoolean("hud.pixel-overlay", true),
+                clientModDownloadUrl,
+                clientModDetectionTicks,
                 c.getBoolean("hud.shooter-bossbar", true),
                 c.getBoolean("hud.target-bossbar", true),
                 resourcePackUrl,

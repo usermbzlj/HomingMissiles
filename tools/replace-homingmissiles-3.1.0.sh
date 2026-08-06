@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# HomingMissiles 3.0.0 transactional replacement tool for Linux servers.
+# HomingMissiles 3.1.0 transactional replacement tool for Linux servers.
 # Run as root. Existing plugin configuration is never overwritten.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
 umask 077
 
-readonly RELEASE_VERSION="3.0.0"
-readonly RELEASE_JAR_NAME="HomingMissiles-3.0.0.jar"
-readonly EXPECTED_SHA256="510ceb41aca22e7f0acede692715668266e5a51ea6037f8bdf28be91850ef624"
+readonly RELEASE_VERSION="3.1.0"
+readonly RELEASE_JAR_NAME="HomingMissiles-3.1.0.jar"
+readonly EXPECTED_SHA256="4b62bd567cd62f995a79d73568252dc6c8ea0c702767a79bbd6b39bd722d6a65"
 readonly EXPECTED_MAIN="cn.yjj.homingmissiles.HomingMissilesPlugin"
 readonly DEFAULT_CONFIG_NAME="deploy-config.properties"
 
@@ -35,30 +35,30 @@ ZIP_BACKEND=""
 
 usage() {
     cat <<'USAGE'
-HomingMissiles 3.0.0 一键替换工具
+HomingMissiles 3.1.0 一键替换工具
 
 零参数用法：
   # 把 JAR、脚本和 deploy-config.properties 放在同一目录后执行：
-  sudo bash replace-homingmissiles-3.0.0.sh
+  sudo bash replace-homingmissiles-3.1.0.sh
 
-脚本默认读取同目录的 HomingMissiles-3.0.0.jar 与 deploy-config.properties。
+脚本默认读取同目录的 HomingMissiles-3.1.0.jar 与 deploy-config.properties。
 
 脚本会按服务器 WorkingDirectory 自动识别唯一的 systemd 服务。也可以显式指定：
-  bash replace-homingmissiles-3.0.0.sh \
-    --jar /root/HomingMissiles-3.0.0.jar \
+  bash replace-homingmissiles-3.1.0.sh \
+    --jar /root/HomingMissiles-3.1.0.jar \
     --server-dir /opt/minecraft \
     --service minecraft.service
 
-如果脚本与 HomingMissiles-3.0.0.jar 放在同一目录，可以省略 --jar。
+如果脚本与 HomingMissiles-3.1.0.jar 放在同一目录，可以省略 --jar。
 
 服务器已由你手动完整停止且不受 systemd 管理时：
-  sudo bash replace-homingmissiles-3.0.0.sh \
-    --jar /root/HomingMissiles-3.0.0.jar \
+  sudo bash replace-homingmissiles-3.1.0.sh \
+    --jar /root/HomingMissiles-3.1.0.jar \
     --server-dir /opt/minecraft \
     --install-only
 
 参数：
-  --jar PATH            待安装的 3.0.0 JAR；可省略并使用上述查找顺序
+  --jar PATH            待安装的 3.1.0 JAR；可省略并使用上述查找顺序
   --config PATH         部署配置；默认读取脚本同目录的 deploy-config.properties
   --server-dir PATH     Minecraft 根目录；命令行值覆盖部署配置
   --service UNIT        显式指定 systemd 服务；省略时按 WorkingDirectory 自动识别
@@ -273,8 +273,8 @@ validate_release_jar() {
     metadata="$(zip_read_plugin_yml "$jar" 2>/dev/null)" || die "JAR 中缺少 plugin.yml"
     grep -Eiq "^[[:space:]]*name:[[:space:]]*['\"]?HomingMissiles['\"]?[[:space:]]*(#.*)?$" <<<"$metadata" \
         || die "plugin.yml 的 name 不是 HomingMissiles"
-    grep -Eiq "^[[:space:]]*version:[[:space:]]*['\"]?3\.0\.0['\"]?[[:space:]]*(#.*)?$" <<<"$metadata" \
-        || die "plugin.yml 的 version 不是 3.0.0"
+    grep -Eiq "^[[:space:]]*version:[[:space:]]*['\"]?3\.1\.0['\"]?[[:space:]]*(#.*)?$" <<<"$metadata" \
+        || die "plugin.yml 的 version 不是 3.1.0"
     grep -Eiq "^[[:space:]]*main:[[:space:]]*['\"]?cn\.yjj\.homingmissiles\.HomingMissilesPlugin['\"]?[[:space:]]*(#.*)?$" <<<"$metadata" \
         || die "plugin.yml 的 main 不是 $EXPECTED_MAIN"
 }
@@ -318,13 +318,13 @@ new_log_has_start_marker() {
         start_byte=$((LOG_SIZE_BEFORE + 1))
     fi
     tail -c "+$start_byte" -- "$latest" 2>/dev/null \
-        | grep -aE 'Enabling HomingMissiles v3\.0\.0|HomingMissiles 3\.0\.0 .*已启用' >/dev/null
+        | grep -aE 'Enabling HomingMissiles v3\.1\.0|HomingMissiles 3\.1\.0 .*已启用' >/dev/null
 }
 
 journal_has_start_marker() {
     command -v journalctl >/dev/null 2>&1 || return 1
     journalctl -u "$SERVICE" --since "@$SERVICE_START_EPOCH" --no-pager -o cat 2>/dev/null \
-        | grep -aE 'Enabling HomingMissiles v3\.0\.0|HomingMissiles 3\.0\.0 .*已启用' >/dev/null
+        | grep -aE 'Enabling HomingMissiles v3\.1\.0|HomingMissiles 3\.1\.0 .*已启用' >/dev/null
 }
 
 start_and_verify_new_release() {
@@ -339,7 +339,7 @@ start_and_verify_new_release() {
     while (( SECONDS < deadline )); do
         state="$(systemctl is-active "$SERVICE" 2>/dev/null || true)"
         if [[ "$state" == active ]] && (new_log_has_start_marker || journal_has_start_marker); then
-            log INFO "服务处于 active，且已观察到 HomingMissiles 3.0.0 启用标记。"
+            log INFO "服务处于 active，且已观察到 HomingMissiles 3.1.0 启用标记。"
             return 0
         fi
         if [[ "$state" == failed ]]; then
@@ -347,7 +347,7 @@ start_and_verify_new_release() {
         fi
         sleep 1
     done
-    die "在 ${STARTUP_TIMEOUT}s 内未同时确认服务 active 和插件 3.0.0 启用标记"
+    die "在 ${STARTUP_TIMEOUT}s 内未同时确认服务 active 和插件 3.1.0 启用标记"
 }
 
 rollback() {
@@ -384,7 +384,7 @@ rollback() {
     fi
 
     if (( rollback_ok == 1 )); then
-        log WARN "自动回滚已完成；失败的 3.0.0 文件保存在备份目录中供排查。"
+        log WARN "自动回滚已完成；失败的 3.1.0 文件保存在备份目录中供排查。"
     else
         log ERROR "自动回滚遇到错误。旧 JAR 仍保存在：$BACKUP_DIR"
     fi
@@ -568,7 +568,7 @@ find_installed_homing_jars
 if (( ${#INSTALLED_JARS[@]} == 1 )) && [[ "${INSTALLED_JARS[0]}" == "$DEST_JAR" ]]; then
     installed_hash="$(sha256sum -- "$DEST_JAR" | awk '{print tolower($1)}')"
     if [[ "$installed_hash" == "$EXPECTED_SHA256" ]]; then
-        log INFO "目标已是经过校验的 HomingMissiles 3.0.0；无需停服或重复替换。"
+        log INFO "目标已是经过校验的 HomingMissiles 3.1.0；无需停服或重复替换。"
         COMMITTED=1
         exit 0
     fi
@@ -640,7 +640,7 @@ if command -v restorecon >/dev/null 2>&1; then
     restorecon -F "$DEST_JAR" >/dev/null 2>&1 || log WARN "restorecon 未成功；请检查 SELinux 上下文"
 fi
 sync -f "$PLUGIN_DIR"
-log INFO "3.0.0 JAR 已原子安装：$DEST_JAR"
+log INFO "3.1.0 JAR 已原子安装：$DEST_JAR"
 
 if [[ "${HM_INSTALLER_TESTING:-0}" == 1 && "${HM_INSTALLER_TEST_FAIL_AFTER_INSTALL:-0}" == 1 ]]; then
     die "测试注入：安装后强制失败"

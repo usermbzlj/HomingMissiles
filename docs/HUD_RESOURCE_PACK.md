@@ -1,10 +1,10 @@
-# 像素 HMD 资源包部署
+# 纯服务端像素 HMD 降级方案
 
-HomingMissiles 的主 HUD 是参考 [VulpesStella/FlightHud](https://github.com/VulpesStella/FlightHud) 的飞行仪表布局、从零绘制的动态分层头戴显示器，不是聊天、标题或字符画。服务器只需要 Paper 系插件；玩家不需要安装 Fabric、Forge 或额外客户端模组，但必须允许服务器资源包。
+HomingMissiles 同时提供推荐的 [Fabric 客户端 Mod](CLIENT_MOD.md) 和无需安装 Mod 的纯服务端方案。本页只说明后者。插件登录后先检测 Mod；未收到握手才发送资源包，资源包仍不可用时继续降级为 BossBar，武器逻辑始终可用。
 
-一帧由多个同尺寸透明 PNG 字形通过负间距叠加而成。插件先对飞行遥测和目标屏幕坐标逐 tick 插值，再组合基础框架、72 档航向滑尺、25 档俯仰梯/人工地平线、81 档速度、97 档高度、65 档离地高度、49 区飞行矢量、98 个标定框状态、18 个标定进度状态、5 档挂点和 24 种来袭状态，共 535 个有效图层字形。单个元素只跨一个小档位过渡，不再切换整幅 HUD 贴图。
+一帧由多个同尺寸透明 PNG 字形通过负间距叠加而成。完整 HUD 在整个鞘翅飞行期间显示，插件逐 tick 插值遥测和目标屏幕坐标，再组合 535 个有效图层。服务端通过居中的 Title 字体 `homingmissiles:hud_title` 显示固定 192×96 GUI 像素画面，资源图的中心准星与 Title 光学中心对齐；这比旧 ActionBar 基线稳定，但无法达到客户端 Mod 对任意宽高、GUI 缩放和每个渲染帧的自适应精度，因此仍推荐 Mod。
 
-拉住制导弓时，黄色标定框跟随视锥内目标移动，进度条从 `SCAN` 进入 `ACQ`；持续保持到配置时长后，框体转绿并显示 `LOCK`。未安装/未接受资源包时，同一状态机降级为分段 BossBar，发射门禁不受 HUD 是否可见影响。
+拉住制导弓时，黄色标定框跟随视锥内目标移动，持续保持到配置时长后转绿并显示 `LOCK`。玩家关闭完整 HUD 后，这个锁定框/进度仍会显示；未接受资源包时则用分段 BossBar 保留进度。发射门禁不受显示路径影响。
 
 ## 选择文件
 
@@ -17,8 +17,8 @@ HomingMissiles 的主 HUD 是参考 [VulpesStella/FlightHud](https://github.com/
 
 本次确定性构建的 SHA-1：
 
-- 1.21.4：`5a82391f670622fecacd4c66ce8fdf13ab6c669d`
-- 1.21.11：`ed91117f45ee420121a5f1d973380e369244a93b`
+- 1.21.4：`21feb1128140538ca2b8148b0231df71882c40d8`
+- 1.21.11：`3df213e06333ec91847c2d878b6764426e0c2e4b`
 
 R4700G3 的 Leaf 1.21.11 应使用第二个文件和第二个校验值。每个 ZIP 旁边的 `.sha1` 文件也保存了配置所需的值；`HomingMissiles-HUD-preview.png` 用于人工验收，不应发给客户端。
 
@@ -40,7 +40,7 @@ hud:
   target-bossbar: true
   resource-pack:
     url: 'https://example.com/minecraft/HomingMissiles-HUD-1.21.11.zip'
-    sha1: 'ed91117f45ee420121a5f1d973380e369244a93b'
+    sha1: '3df213e06333ec91847c2d878b6764426e0c2e4b'
     required: false
     prompt: '&b启用动态飞行导弹头显与座舱音效'
     assume-server-pack-provides-hud: false
@@ -73,7 +73,7 @@ hud:
 hud:
   resource-pack:
     url: 'http://你的公网主机:25568/homingmissiles/hud-1.21.11.zip'
-    sha1: 'ed91117f45ee420121a5f1d973380e369244a93b'
+    sha1: '3df213e06333ec91847c2d878b6764426e0c2e4b'
     self-host:
       enabled: true
       bind-address: '0.0.0.0'
@@ -92,7 +92,8 @@ hud:
 4. 发射者看到最多 4 个挂点占用，但不出现目标名、距离、方向或速度。
 5. 被锁玩家看到来自八个离散方向之一的黄/橙/红威胁图形；同时作为射手时，挂点层与来袭层会共同显示。
 6. 资源包就绪时，发射和锁定确认使用包内定制合成音，普通/临界来袭使用 CC0 衍生警报；未就绪时自动回退到原版 Minecraft 音效。
-7. 导弹消失后 ActionBar 图形清空；拒绝资源包的测试客户端得到 BossBar 降级界面，战斗逻辑不受影响。
+7. 结束飞行后 Title 图形平滑退出；拒绝资源包的测试客户端得到 BossBar 降级界面，战斗逻辑不受影响。
+8. `/hbow hud off` 后完整飞行框架消失；拉弓时锁定框和进度仍正常出现。
 
 ## 参考与音频版权边界
 
@@ -105,8 +106,9 @@ hud:
 ## 常见故障
 
 - **一直是 BossBar**：检查 `url` 是否为空、客户端是否接受、服务器日志是否记录资源包失败，以及 SHA-1 是否与 ZIP 一致。
-- **出现方框**：资源包中缺少 `assets/homingmissiles/font/hud.json` 或纹理，或错误启用了 `assume-server-pack-provides-hud`。
+- **出现方框**：资源包中缺少 `assets/homingmissiles/font/hud_title.json`、`hud.json` 或纹理，或错误启用了 `assume-server-pack-provides-hud`。
 - **图层横向错开**：确认没有旧版 `hud.json` 覆盖新包；新版字体必须包含 `U+E0FF` 的 `-193` 负间距 provider。
 - **只有原版声音**：确认资源包成功加载，且 `assets/homingmissiles/sounds.json` 与四个 `sounds/hud/*.ogg` 均存在。
 - **下载失败**：用另一台网络环境中的浏览器直接访问 URL；确认没有鉴权、跳转到 HTML、证书错误或防盗链。
 - **更新后仍显示旧图**：重新计算 SHA-1 并更新配置，或更换 URL 文件名，然后重新连接。
+- **其他插件的 Title 被覆盖**：纯服务端精确居中方案占用 Title 层；需要大量剧情 Title 的服务器应优先推荐客户端 Mod。
