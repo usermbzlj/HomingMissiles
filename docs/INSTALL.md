@@ -7,25 +7,62 @@
 - 不支持纯原版、Fabric、Forge/NeoForge
 - 当前不声明 Folia 兼容
 
-## 推荐：root 一键事务式替换
+## Windows 一键上传
 
-在 R4700G3 上，把两个文件都上传至 `/home/pell/`：
+正式构建完成后，在源码根目录运行：
 
-- `/home/pell/HomingMissiles-3.0.0.jar`
-- `/home/pell/replace-homingmissiles-3.0.0.sh`
-
-像素 HUD ZIP 不放入 `plugins/`。Leaf 1.21.11 使用 `target/hud-packs/HomingMissiles-HUD-1.21.11.zip`，并把它托管在玩家可访问的 HTTP(S) 地址；完整步骤见 [HUD_RESOURCE_PACK.md](HUD_RESOURCE_PACK.md)。资源包没有配置好时插件仍能运行，但会降级显示 BossBar。
-
-然后由 root 执行：
-
-```bash
-bash /home/pell/replace-homingmissiles-3.0.0.sh
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\upload-homingmissiles-3.0.0.ps1"
 ```
 
-该主机的默认服务器目录是 `/home/NextGeneration/McThuner`。脚本会查找 `WorkingDirectory` 与该目录完全相同的唯一 systemd 服务；不会仅凭名称猜测，更不会误停整个管理面板。其他主机或路径可以显式覆盖：
+也可以直接运行 `tools\upload-homingmissiles-3.0.0.cmd`。上传器读取两个不会提交到 Git 的本地配置。首次使用时复制模板：
+
+```powershell
+Copy-Item .\tools\upload-config.example.properties .\tools\upload-config.properties
+Copy-Item .\tools\deploy-config.example.properties .\tools\deploy-config.properties
+```
+
+在上传配置中填写 `remote_host`、`remote_user`、`port`、`remote_directory` 和可选的 `identity_file`；在部署配置中填写 `server_dir`、`service` 与 `startup_timeout`。仓库中的示例配置只包含通用占位值。上传器会把 `deploy-config.properties` 随发布包传到远端，root 替换脚本自动读取它。
+
+上传内容包括插件 JAR、root 替换脚本、`SHA256SUMS.txt`、Leaf 1.21.11 HUD ZIP 及 SHA-1。上传器会执行本地哈希和 JAR 结构检查，仅传输一个临时 ZIP，然后通过 SSH 在远端隔离解压、二次校验并逐文件原子落位；它不会停服或运行 root 部署。
+
+常用选项：
+
+```powershell
+# 只检查并显示操作，不连接服务器
+.\tools\upload-homingmissiles-3.0.0.ps1 -DryRun
+
+# 临时覆盖配置中的主机或端口
+.\tools\upload-homingmissiles-3.0.0.ps1 `
+  -RemoteHostName staging.example.com -Port 2222
+
+# 不上传 HUD 包
+.\tools\upload-homingmissiles-3.0.0.ps1 -SkipHudPack
+```
+
+不要把密码写进脚本、配置或命令行。若需要完全无人值守，应把本机公钥加入目标服务器用户的 `~/.ssh/authorized_keys`，并先人工核对服务器主机指纹。
+
+## 推荐：root 一键事务式替换
+
+上传完成后，以下文件位于上传配置指定的 `remote_directory`：
+
+- `HomingMissiles-3.0.0.jar`
+- `replace-homingmissiles-3.0.0.sh`
+- `deploy-config.properties`
+
+像素 HUD ZIP 不放入 `plugins/`。上传器会把 Leaf 1.21.11 HUD 包保存在同一个 `remote_directory`，之后仍需把它托管在玩家可访问的 HTTP(S) 地址；完整步骤见 [HUD_RESOURCE_PACK.md](HUD_RESOURCE_PACK.md)。资源包没有配置好时插件仍能运行，但会降级显示 BossBar。
+
+然后由 root 执行上传器打印的准确命令，例如：
+
+```bash
+sudo bash /your/upload/directory/replace-homingmissiles-3.0.0.sh
+```
+
+脚本会读取 `deploy-config.properties` 的 `server_dir`，并查找 `WorkingDirectory` 与该目录完全相同的唯一 systemd 服务；不会仅凭名称猜测，更不会误停整个管理面板。也可以显式覆盖：
 
 ```bash
 bash replace-homingmissiles-3.0.0.sh \
+  --config /root/deploy-config.properties \
   --jar /root/upload/HomingMissiles-3.0.0.jar \
   --server-dir /opt/minecraft \
   --service minecraft.service
@@ -50,7 +87,7 @@ SHA-256  26a477b0e1087f4d95a503a27ae99f9a4284d2fb44fa76739d9db8e69fe90906
 服务器由面板而不是独立 systemd 单元管理时，脚本会在发现运行中的 Java 进程后安全退出。先通过面板完整停服，再使用：
 
 ```bash
-bash /home/pell/replace-homingmissiles-3.0.0.sh \
+sudo bash /your/upload/directory/replace-homingmissiles-3.0.0.sh \
   --install-only
 ```
 

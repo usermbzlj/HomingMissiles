@@ -35,13 +35,21 @@
 - `tools/replace-homingmissiles-3.0.0.sh`
 - `target/hud-packs/HomingMissiles-HUD-1.21.11.zip`（Leaf 1.21.11）
 
-在你的 R4700G3 上，上传位置和服务器位置已经预设，因此 root 可以直接执行：
+在 Windows 源码目录中执行一条命令即可上传完整发布包：
 
-```bash
-bash /home/pell/replace-homingmissiles-3.0.0.sh
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\upload-homingmissiles-3.0.0.ps1"
 ```
 
-脚本默认读取 `/home/pell/HomingMissiles-3.0.0.jar`，目标服务器为 `/home/NextGeneration/McThuner`，并按 `WorkingDirectory` 精确匹配唯一的 systemd 服务。其他服务器仍可通过 `--jar`、`--server-dir` 和 `--service` 覆盖默认值。脚本会固定校验 JAR 的 SHA-256
+也可以直接运行 `tools\upload-homingmissiles-3.0.0.cmd`。连接信息来自不会提交到 Git 的 `tools/upload-config.properties`，Minecraft 目录与服务信息来自同样被忽略的 `tools/deploy-config.properties`；仓库只保留两个 `.example.properties` 通用模板。上传器会把发布文件和部署配置打成一次性传输包，在远端隔离解压、复核并逐文件原子落位。它不会停服或执行 root 安装。
+
+上传成功后，上传器会打印 root 应执行的准确命令，例如：
+
+```bash
+sudo bash /your/upload/directory/replace-homingmissiles-3.0.0.sh
+```
+
+脚本默认读取同目录的 JAR 与 `deploy-config.properties`，并按配置中的服务器目录精确匹配唯一的 systemd 服务。命令行 `--jar`、`--config`、`--server-dir` 和 `--service` 可以覆盖配置。脚本会固定校验 JAR 的 SHA-256
 `26a477b0e1087f4d95a503a27ae99f9a4284d2fb44fa76739d9db8e69fe90906`，自动停服、备份旧 JAR、原子替换、重启并验证插件启用；任一步失败都会尝试恢复旧 JAR 和原服务状态。现有 `plugins/HomingMissiles/config.yml` 不会被覆盖。
 
 如果不使用脚本，必须手工完成：完全停服、移走所有旧版 HomingMissiles JAR、放入 3.0.0 JAR、完整启动。不要使用 Minecraft 的 `/reload` 代替重启，也不要在 `plugins/` 中同时保留多个版本。
@@ -344,7 +352,11 @@ HomingMissilesPlugin/
 │  ├─ verify-offline.ps1
 │  ├─ HudPackBuilder.java
 │  ├─ test-replacement-script.sh
-│  └─ replace-homingmissiles-3.0.0.sh
+│  ├─ replace-homingmissiles-3.0.0.sh
+│  ├─ deploy-config.example.properties
+│  ├─ upload-config.example.properties
+│  ├─ upload-homingmissiles-3.0.0.ps1
+│  └─ upload-homingmissiles-3.0.0.cmd
 └─ docs/
    ├─ INSTALL.md
    ├─ COMMANDS.md

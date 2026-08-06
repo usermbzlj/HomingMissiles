@@ -50,6 +50,8 @@ Maven 的 `package` 阶段还会以无界面 Java AWT 执行 `tools/HudPackBuild
 
 修改 Linux 替换脚本后，在 WSL/Linux 执行 `bash tools/test-replacement-script.sh`。测试在 `/tmp` 创建隔离的伪服务器，并覆盖首次安装、重复运行、配置保留和注入故障后的精确回滚。
 
+修改 Windows 上传器后，至少执行 `powershell.exe -NoProfile -File tools/upload-homingmissiles-3.0.0.ps1 -DryRun`，并用 Windows PowerShell 解析器检查语法。上传器、配置模板和 CMD 包装器保持 ASCII 内容，以兼容 Windows PowerShell 5 与中文工作区路径。不得提交 `tools/upload-config.properties` 或 `tools/deploy-config.properties`；只维护可公开的 `.example.properties`。
+
 ## 3. IDE 导入
 
 以 Maven 项目打开根目录的 `pom.xml`。
