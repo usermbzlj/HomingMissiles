@@ -9,6 +9,7 @@ public interface World {
  List<Player> getPlayers();
  List<Entity> getEntities();
  void spawnParticle(Particle particle, Location location, int count, double offsetX, double offsetY, double offsetZ, double extra);
+ <T> void spawnParticle(Particle particle, Location location, int count, double offsetX, double offsetY, double offsetZ, double extra, T data);
  void playSound(Location location, Sound sound, float volume, float pitch);
  Item dropItemNaturally(Location location, ItemStack item);
 }

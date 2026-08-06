@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 public final class SettingsManager {
     public static final int CONFIG_VERSION = 5;
@@ -133,6 +135,29 @@ public final class SettingsManager {
             warnings.add("hud.resource-pack.url 已配置但 sha1 为空；建议填写构建产物的 SHA-1 以启用客户端缓存与完整性校验");
         }
 
+        boolean selfHostEnabled = c.getBoolean("hud.resource-pack.self-host.enabled", false);
+        String selfHostBind = c.getString("hud.resource-pack.self-host.bind-address", "0.0.0.0").trim();
+        if (selfHostBind.isEmpty() || !isAscii(selfHostBind)) {
+            warnings.add("hud.resource-pack.self-host.bind-address 无效，已禁用内置资源包服务");
+            selfHostEnabled = false;
+            selfHostBind = "0.0.0.0";
+        }
+        int selfHostPort = boundedInt(c, "hud.resource-pack.self-host.port", 25568, 1024, 65535, warnings);
+        String selfHostPath = c.getString(
+                "hud.resource-pack.self-host.path", "/homingmissiles/hud-1.21.11.zip").trim();
+        if (!isSafeHttpPath(selfHostPath)) {
+            warnings.add("hud.resource-pack.self-host.path 必须是简单的绝对 URL 路径，已禁用内置资源包服务");
+            selfHostEnabled = false;
+            selfHostPath = "/homingmissiles/hud-1.21.11.zip";
+        }
+        if (selfHostEnabled) {
+            String reason = validateSelfHostedUrl(resourcePackUrl, resourcePackSha1, selfHostPort, selfHostPath);
+            if (reason != null) {
+                warnings.add(reason + "，已禁用内置资源包服务");
+                selfHostEnabled = false;
+            }
+        }
+
         Set<String> disabledWorlds = new LinkedHashSet<>();
         for (String world : c.getStringList("worlds.disabled")) {
             if (world != null && !world.isBlank()) {
@@ -194,6 +219,10 @@ public final class SettingsManager {
                 c.getBoolean("hud.resource-pack.required", false),
                 color(c.getString("hud.resource-pack.prompt", "&b启用像素化导弹头显")),
                 c.getBoolean("hud.resource-pack.assume-server-pack-provides-hud", false),
+                selfHostEnabled,
+                selfHostBind,
+                selfHostPort,
+                selfHostPath,
                 c.getBoolean("hud.warning-audio", true),
                 warningMin,
                 warningMax,
@@ -208,6 +237,42 @@ public final class SettingsManager {
                 maxGive
         );
         return new LoadReport(current, List.copyOf(warnings));
+    }
+
+    private static boolean isSafeHttpPath(String value) {
+        return value != null
+                && value.length() >= 2
+                && value.length() <= 160
+                && value.charAt(0) == '/'
+                && !value.endsWith("/")
+                && !value.contains("//")
+                && !value.contains("..")
+                && value.matches("/[A-Za-z0-9._/-]+");
+    }
+
+    private static String validateSelfHostedUrl(String url, String sha1, int port, String path) {
+        if (url == null || url.isBlank()) {
+            return "启用 self-host 时 hud.resource-pack.url 不能为空";
+        }
+        if (sha1 == null || !sha1.matches("[0-9a-f]{40}")) {
+            return "启用 self-host 时 hud.resource-pack.sha1 必须有效";
+        }
+        try {
+            URI uri = new URI(url);
+            int effectivePort = uri.getPort() >= 0 ? uri.getPort() : 80;
+            if (!"http".equalsIgnoreCase(uri.getScheme())) {
+                return "内置资源包服务只提供 HTTP，url 必须使用 http://";
+            }
+            if (uri.getHost() == null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
+                return "内置资源包 url 必须包含主机且不能带查询或片段";
+            }
+            if (effectivePort != port || !path.equals(uri.getRawPath())) {
+                return "内置资源包 url 的端口和路径必须与 self-host 配置一致";
+            }
+        } catch (URISyntaxException ex) {
+            return "内置资源包 url 语法无效";
+        }
+        return null;
     }
 
     public TuneResult setTunable(String key, double value) {
@@ -345,7 +410,9 @@ public final class SettingsManager {
                                                          List<String> warnings) {
         String raw = c.getString(path, fallback.name().toLowerCase(Locale.ROOT));
         PluginSettings.FeedbackMode parsed = PluginSettings.FeedbackMode.parse(raw, fallback);
-        if (raw != null && !raw.equalsIgnoreCase(parsed.name())) {
+        boolean legacyBoolean = raw != null
+                && (raw.equalsIgnoreCase("true") || raw.equalsIgnoreCase("false"));
+        if (raw != null && !legacyBoolean && !raw.equalsIgnoreCase(parsed.name())) {
             warnings.add(path + "=" + raw + " 无效，使用 " + parsed.name().toLowerCase(Locale.ROOT));
         }
         return parsed;

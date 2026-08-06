@@ -121,6 +121,13 @@ hud:
     prompt: '&b启用像素化导弹头显'
     # 若你已把 homingmissiles:hud 合并进 server.properties 的全服资源包，可设为 true。
     assume-server-pack-provides-hud: false
+    # 可选：由插件进程直接提供上面的 ZIP。默认关闭，不会额外监听端口。
+    # 文件固定放在 plugins/HomingMissiles/hud/HomingMissiles-HUD-1.21.11.zip。
+    self-host:
+      enabled: false
+      bind-address: '0.0.0.0'
+      port: 25568
+      path: '/homingmissiles/hud-1.21.11.zip'
   warning-audio: true
   # 来袭声从导弹方向空间化播放，距离越近节奏越紧；单位 tick（20 tick = 1秒）。
   warning-min-interval-ticks: 4

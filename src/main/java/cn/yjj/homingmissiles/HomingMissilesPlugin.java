@@ -5,12 +5,15 @@ import cn.yjj.homingmissiles.config.SettingsManager;
 import cn.yjj.homingmissiles.item.HomingBowFactory;
 import cn.yjj.homingmissiles.listener.HomingListener;
 import cn.yjj.homingmissiles.service.HomingService;
+import cn.yjj.homingmissiles.service.HudPackServer;
 import cn.yjj.homingmissiles.service.LockHudService;
 import cn.yjj.homingmissiles.util.MessageService;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Objects;
+import java.io.IOException;
+import java.util.logging.Level;
 
 public final class HomingMissilesPlugin extends JavaPlugin {
     public static final String VERSION = "3.0.0";
@@ -19,6 +22,7 @@ public final class HomingMissilesPlugin extends JavaPlugin {
     private MessageService messages;
     private HomingBowFactory bowFactory;
     private HomingService homingService;
+    private HudPackServer hudPackServer;
 
     @Override
     public void onEnable() {
@@ -26,6 +30,8 @@ public final class HomingMissilesPlugin extends JavaPlugin {
 
         settingsManager = new SettingsManager(this);
         SettingsManager.LoadReport loadReport = settingsManager.reload();
+        hudPackServer = new HudPackServer(getLogger());
+        refreshHudHosting();
         messages = new MessageService(settingsManager);
         bowFactory = new HomingBowFactory(this, settingsManager);
         LockHudService lockHud = new LockHudService(settingsManager);
@@ -58,6 +64,32 @@ public final class HomingMissilesPlugin extends JavaPlugin {
     public void onDisable() {
         if (homingService != null) {
             homingService.shutdown();
+        }
+        if (hudPackServer != null) {
+            hudPackServer.close();
+        }
+    }
+
+    public void refreshHudHosting() {
+        if (hudPackServer == null || settingsManager == null || settingsManager.current() == null) {
+            return;
+        }
+        var settings = settingsManager.current();
+        var config = new HudPackServer.Config(
+                settings.hudSelfHostEnabled(),
+                settings.hudSelfHostBindAddress(),
+                settings.hudSelfHostPort(),
+                settings.hudSelfHostPath(),
+                settings.hudResourcePackSha1());
+        try {
+            HudPackServer.StartResult result = hudPackServer.restart(getDataFolder().toPath(), config);
+            if (result.enabled()) {
+                getLogger().info("内置 HUD 资源包服务已启动：http://" + result.bindAddress() + ":"
+                        + result.port() + result.path() + "，字节=" + result.contentLength()
+                        + "，SHA-1=" + result.sha1());
+            }
+        } catch (IOException | RuntimeException ex) {
+            getLogger().log(Level.SEVERE, "内置 HUD 资源包服务启动失败；像素 HUD 将降级为 BossBar", ex);
         }
     }
 

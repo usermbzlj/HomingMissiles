@@ -56,6 +56,10 @@ public record PluginSettings(
         boolean hudResourcePackRequired,
         String hudResourcePackPrompt,
         boolean assumeServerPackProvidesHud,
+        boolean hudSelfHostEnabled,
+        String hudSelfHostBindAddress,
+        int hudSelfHostPort,
+        String hudSelfHostPath,
         boolean warningAudio,
         int warningMinIntervalTicks,
         int warningMaxIntervalTicks,
@@ -78,8 +82,15 @@ public record PluginSettings(
             if (raw == null) {
                 return fallback;
             }
+            String normalized = raw.trim().toUpperCase();
+            if ("FALSE".equals(normalized)) {
+                return OFF;
+            }
+            if ("TRUE".equals(normalized)) {
+                return fallback;
+            }
             try {
-                return valueOf(raw.trim().toUpperCase());
+                return valueOf(normalized);
             } catch (IllegalArgumentException ignored) {
                 return fallback;
             }

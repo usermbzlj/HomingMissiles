@@ -8,16 +8,17 @@ umask 077
 
 readonly RELEASE_VERSION="3.0.0"
 readonly RELEASE_JAR_NAME="HomingMissiles-3.0.0.jar"
-readonly EXPECTED_SHA256="26a477b0e1087f4d95a503a27ae99f9a4284d2fb44fa76739d9db8e69fe90906"
+readonly EXPECTED_SHA256="fa090d31cd93dcd44c47a3937d65167e921d73f87538dceafb42ec26bc1f1fb6"
 readonly EXPECTED_MAIN="cn.yjj.homingmissiles.HomingMissilesPlugin"
-readonly HOST_DEFAULT_JAR="/home/pell/HomingMissiles-3.0.0.jar"
-readonly HOST_DEFAULT_SERVER_DIR="/home/NextGeneration/McThuner"
+readonly DEFAULT_CONFIG_NAME="deploy-config.properties"
 
 SOURCE_JAR=""
 SERVER_DIR=""
 SERVICE=""
 INSTALL_ONLY=0
 STARTUP_TIMEOUT=120
+CONFIG_FILE=""
+CONFIG_EXPLICIT=0
 
 WORK_DIR=""
 PLUGIN_DIR=""
@@ -36,14 +37,11 @@ usage() {
     cat <<'USAGE'
 HomingMissiles 3.0.0 一键替换工具
 
-R4700G3 专用零参数用法：
-  # 把 JAR 和本脚本都放入 /home/pell 后，以 root 执行：
-  bash /home/pell/replace-homingmissiles-3.0.0.sh
+零参数用法：
+  # 把 JAR、脚本和 deploy-config.properties 放在同一目录后执行：
+  sudo bash replace-homingmissiles-3.0.0.sh
 
-默认读取：
-  /home/pell/HomingMissiles-3.0.0.jar
-默认服务器：
-  /home/NextGeneration/McThuner
+脚本默认读取同目录的 HomingMissiles-3.0.0.jar 与 deploy-config.properties。
 
 脚本会按服务器 WorkingDirectory 自动识别唯一的 systemd 服务。也可以显式指定：
   bash replace-homingmissiles-3.0.0.sh \
@@ -61,7 +59,8 @@ R4700G3 专用零参数用法：
 
 参数：
   --jar PATH            待安装的 3.0.0 JAR；可省略并使用上述查找顺序
-  --server-dir PATH     Minecraft 根目录；省略时优先使用 R4700G3 默认目录
+  --config PATH         部署配置；默认读取脚本同目录的 deploy-config.properties
+  --server-dir PATH     Minecraft 根目录；命令行值覆盖部署配置
   --service UNIT        显式指定 systemd 服务；省略时按 WorkingDirectory 自动识别
   --install-only        只安装，不操作或启动服务；服务器必须已经停止
   --timeout SECONDS     等待停服和启动验证的秒数，默认 120，范围 30..900
@@ -97,6 +96,42 @@ die() {
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || die "缺少必需命令：$1"
+}
+
+load_deploy_config() {
+    local file="$1" raw line key value line_number=0
+    local -A config_seen=()
+    while IFS= read -r raw || [[ -n "$raw" ]]; do
+        ((line_number += 1))
+        line="${raw%$'\r'}"
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ -z "$line" || "$line" == \#* ]] && continue
+        [[ "$line" == *=* ]] || die "部署配置第 $line_number 行格式错误：应为 key=value"
+        key="${line%%=*}"
+        value="${line#*=}"
+        key="${key#"${key%%[![:space:]]*}"}"
+        key="${key%"${key##*[![:space:]]}"}"
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
+        [[ -n "$key" ]] || die "部署配置第 $line_number 行键名为空"
+        [[ -z "${config_seen[$key]+x}" ]] || die "部署配置包含重复键：$key"
+        config_seen["$key"]=1
+        case "$key" in
+            server_dir)
+                SERVER_DIR="$value"
+                ;;
+            service)
+                SERVICE="$value"
+                ;;
+            startup_timeout)
+                STARTUP_TIMEOUT="$value"
+                ;;
+            *)
+                die "部署配置包含未知键：$key"
+                ;;
+        esac
+    done <"$file"
 }
 
 select_zip_backend() {
@@ -370,6 +405,24 @@ trap on_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+CONFIG_FILE="$script_dir/$DEFAULT_CONFIG_NAME"
+arguments=("$@")
+for ((argument_index = 0; argument_index < ${#arguments[@]}; argument_index++)); do
+    if [[ "${arguments[argument_index]}" == --config ]]; then
+        (( argument_index + 1 < ${#arguments[@]} )) || die "--config 缺少路径"
+        CONFIG_FILE="${arguments[argument_index + 1]}"
+        CONFIG_EXPLICIT=1
+        ((argument_index += 1))
+    fi
+done
+if [[ -f "$CONFIG_FILE" ]]; then
+    CONFIG_FILE="$(canonical_existing_path "$CONFIG_FILE")"
+    load_deploy_config "$CONFIG_FILE"
+elif (( CONFIG_EXPLICIT == 1 )); then
+    die "部署配置不存在：$CONFIG_FILE"
+fi
+
 while (( $# > 0 )); do
     case "$1" in
         --jar)
@@ -380,6 +433,10 @@ while (( $# > 0 )); do
         --server-dir)
             (( $# >= 2 )) || die "--server-dir 缺少路径"
             SERVER_DIR="$2"
+            shift 2
+            ;;
+        --config)
+            (( $# >= 2 )) || die "--config 缺少路径"
             shift 2
             ;;
         --service)
@@ -422,31 +479,26 @@ for command_name in realpath sha256sum awk grep find stat install flock mv cp sy
 done
 select_zip_backend
 
-script_dir="$(canonical_existing_path "$(dirname -- "${BASH_SOURCE[0]}")")"
 if [[ -z "$SOURCE_JAR" ]]; then
     if [[ -f "$script_dir/$RELEASE_JAR_NAME" ]]; then
         SOURCE_JAR="$script_dir/$RELEASE_JAR_NAME"
     elif [[ -f "$PWD/$RELEASE_JAR_NAME" ]]; then
         SOURCE_JAR="$PWD/$RELEASE_JAR_NAME"
-    elif [[ -f "$HOST_DEFAULT_JAR" ]]; then
-        SOURCE_JAR="$HOST_DEFAULT_JAR"
     else
-        die "未找到 $RELEASE_JAR_NAME；已检查脚本目录、当前目录和 $HOST_DEFAULT_JAR"
+        die "未找到 $RELEASE_JAR_NAME；已检查脚本目录和当前目录"
     fi
 fi
 [[ -f "$SOURCE_JAR" ]] || die "JAR 不存在或不是普通文件：$SOURCE_JAR"
 SOURCE_JAR="$(canonical_existing_path "$SOURCE_JAR")"
 
 if [[ -z "$SERVER_DIR" ]]; then
-    if [[ -d "$HOST_DEFAULT_SERVER_DIR" ]]; then
-        SERVER_DIR="$HOST_DEFAULT_SERVER_DIR"
-    elif [[ -n "$SERVICE" ]]; then
+    if [[ -n "$SERVICE" ]]; then
         require_command systemctl
         SERVER_DIR="$(systemctl show "$SERVICE" --property=WorkingDirectory --value 2>/dev/null || true)"
         [[ -n "$SERVER_DIR" && "$SERVER_DIR" == /* ]] \
             || die "无法从 systemd WorkingDirectory 安全确定服务器目录，请显式提供 --server-dir"
     else
-        die "服务器目录不存在：$HOST_DEFAULT_SERVER_DIR；请使用 --server-dir 显式指定"
+        die "未配置服务器目录；请设置 deploy-config.properties 的 server_dir 或使用 --server-dir"
     fi
 fi
 [[ -d "$SERVER_DIR" ]] || die "服务器目录不存在：$SERVER_DIR"

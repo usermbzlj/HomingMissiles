@@ -6,7 +6,9 @@ import cn.yjj.homingmissiles.config.SettingsManager;
 import cn.yjj.homingmissiles.model.TrackedArrow;
 import cn.yjj.homingmissiles.util.GuidanceMath;
 import cn.yjj.homingmissiles.util.MessageService;
+import cn.yjj.homingmissiles.util.ParticleEffectSupport;
 import cn.yjj.homingmissiles.util.VectorMath;
+import org.bukkit.Color;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
@@ -25,11 +27,13 @@ import org.bukkit.util.Vector;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.logging.Level;
@@ -42,6 +46,7 @@ public final class HomingService {
     private final Map<UUID, TrackedArrow> tracked = new LinkedHashMap<>();
     private final Map<UUID, Integer> shooterCounts = new HashMap<>();
     private final Map<UUID, Long> lastLaunchTick = new HashMap<>();
+    private final Set<String> disabledEffectStages = new HashSet<>();
 
     private final NamespacedKey projectileKey;
     private final NamespacedKey shooterKey;
@@ -221,7 +226,7 @@ public final class HomingService {
         persistState(state);
         lastLaunchTick.put(shooter.getUniqueId(), serviceTick);
 
-        spawnLaunchEffects(arrow);
+        runEffectSafely("launch", () -> spawnLaunchEffects(arrow));
         messages.feedback(shooter, settings.launchFeedback(), "launch",
                 "active", activeCount(shooter.getUniqueId()),
                 "limit", settings.maxTrackedPerPlayer());
@@ -235,15 +240,7 @@ public final class HomingService {
         }
         clearPersistentState(arrow);
         if (settingsManager.current().impactEffects()) {
-            Location loc = arrow.getLocation();
-            World world = arrow.getWorld();
-            world.spawnParticle(Particle.EXPLOSION, loc, 1, 0.0, 0.0, 0.0, 0.0);
-            world.spawnParticle(Particle.SONIC_BOOM, loc, 1, 0.0, 0.0, 0.0, 0.0);
-            world.spawnParticle(Particle.LARGE_SMOKE, loc, 18, 0.22, 0.18, 0.22, 0.035);
-            world.spawnParticle(Particle.FLAME, loc, 12, 0.18, 0.18, 0.18, 0.045);
-            world.spawnParticle(Particle.CRIT, loc, 16, 0.3, 0.25, 0.3, 0.18);
-            world.playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 1.1f, 0.82f);
-            world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_LARGE_BLAST, 0.85f, 0.68f);
+            runEffectSafely("impact", () -> spawnImpactEffects(arrow));
         }
     }
 
@@ -405,7 +402,7 @@ public final class HomingService {
         Player shooter = plugin.getServer().getPlayer(state.shooterId());
         lockHud.reportOutbound(shooter);
         if (age < settings.activationDelayTicks()) {
-            spawnSearchEffect(arrow, state);
+            runEffectSafely("search", () -> spawnSearchEffect(arrow, state));
             return true;
         }
 
@@ -414,7 +411,7 @@ public final class HomingService {
             state.targetId(null);
             state.lockNotifiedTarget(null);
             state.clearLockObservation();
-            spawnSearchEffect(arrow, state);
+            runEffectSafely("search", () -> spawnSearchEffect(arrow, state));
             return true;
         }
 
@@ -425,7 +422,7 @@ public final class HomingService {
         state.targetId(target.getUniqueId());
         notifyLockIfNeeded(state, target);
         steerArrow(state, arrow, target);
-        spawnTrackingEffects(arrow, state);
+        runEffectSafely("tracking", () -> spawnTrackingEffects(arrow, state));
 
         lockHud.reportLock(target, arrowLocation, distance);
         return true;
@@ -555,12 +552,7 @@ public final class HomingService {
         PluginSettings settings = settingsManager.current();
         Player shooter = plugin.getServer().getPlayer(state.shooterId());
         if (settings.lockSounds()) {
-            if (shooter != null && shooter.isOnline()) {
-                shooter.playSound(shooter.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 0.55f, 1.45f);
-                shooter.playSound(shooter.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.35f, 1.8f);
-            }
-            target.playSound(target.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 0.75f, 0.65f);
-            target.playSound(target.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, 0.6f, 1.05f);
+            runEffectSafely("lock-audio", () -> playLockSounds(shooter, target));
         }
 
         if (shooter != null && shooter.isOnline()) {
@@ -570,10 +562,35 @@ public final class HomingService {
         messages.feedback(target, settings.lockTargetFeedback(), "inbound-warning");
 
         if (settings.particles()) {
-            Location loc = state.arrow().getLocation();
-            state.arrow().getWorld().spawnParticle(
-                    Particle.ELECTRIC_SPARK, loc, 7, 0.08, 0.08, 0.08, 0.025);
+            runEffectSafely("lock-particle", () -> spawnLockParticle(state.arrow()));
         }
+    }
+
+    private void playLockSounds(Player shooter, Player target) {
+        if (shooter != null && shooter.isOnline()) {
+            shooter.playSound(shooter.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 0.55f, 1.45f);
+            shooter.playSound(shooter.getLocation(), Sound.BLOCK_RESPAWN_ANCHOR_CHARGE, 0.35f, 1.8f);
+        }
+        target.playSound(target.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 0.75f, 0.65f);
+        target.playSound(target.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, 0.6f, 1.05f);
+    }
+
+    private static void spawnLockParticle(AbstractArrow arrow) {
+        Location loc = arrow.getLocation();
+        arrow.getWorld().spawnParticle(
+                Particle.ELECTRIC_SPARK, loc, 7, 0.08, 0.08, 0.08, 0.025);
+    }
+
+    private static void spawnImpactEffects(AbstractArrow arrow) {
+        Location loc = arrow.getLocation();
+        World world = arrow.getWorld();
+        world.spawnParticle(Particle.EXPLOSION, loc, 1, 0.0, 0.0, 0.0, 0.0);
+        world.spawnParticle(Particle.SONIC_BOOM, loc, 1, 0.0, 0.0, 0.0, 0.0);
+        world.spawnParticle(Particle.LARGE_SMOKE, loc, 18, 0.22, 0.18, 0.22, 0.035);
+        world.spawnParticle(Particle.FLAME, loc, 12, 0.18, 0.18, 0.18, 0.045);
+        world.spawnParticle(Particle.CRIT, loc, 16, 0.3, 0.25, 0.3, 0.18);
+        world.playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 1.1f, 0.82f);
+        world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_LARGE_BLAST, 0.85f, 0.68f);
     }
 
     private void spawnLaunchEffects(AbstractArrow arrow) {
@@ -581,7 +598,7 @@ public final class HomingService {
         Location loc = exhaustLocation(arrow, 0.2);
         World world = arrow.getWorld();
         if (settings.launchEffects() && settings.particles()) {
-            world.spawnParticle(Particle.FLASH, loc, 1, 0.0, 0.0, 0.0, 0.0);
+            requireFlash(world, loc, Color.fromRGB(255, 232, 168));
             world.spawnParticle(Particle.LARGE_SMOKE, loc, 7, 0.12, 0.12, 0.12, 0.025);
             world.spawnParticle(Particle.SMALL_FLAME, loc, 9, 0.08, 0.08, 0.08, 0.035);
         }
@@ -627,16 +644,40 @@ public final class HomingService {
 
     private void selfDestruct(AbstractArrow arrow) {
         if (settingsManager.current().selfDestructEffects()) {
-            Location loc = arrow.getLocation();
-            World world = arrow.getWorld();
-            world.spawnParticle(Particle.FLASH, loc, 1, 0.0, 0.0, 0.0, 0.0);
-            world.spawnParticle(Particle.LARGE_SMOKE, loc, 14, 0.2, 0.2, 0.2, 0.025);
-            world.spawnParticle(Particle.CLOUD, loc, 8, 0.15, 0.15, 0.15, 0.04);
-            world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_BLAST_FAR, 0.8f, 0.58f);
-            world.playSound(loc, Sound.BLOCK_BEACON_DEACTIVATE, 0.45f, 0.5f);
+            runEffectSafely("self-destruct", () -> spawnSelfDestructEffects(arrow));
         }
         clearPersistentState(arrow);
         arrow.remove();
+    }
+
+    private static void spawnSelfDestructEffects(AbstractArrow arrow) {
+        Location loc = arrow.getLocation();
+        World world = arrow.getWorld();
+        requireFlash(world, loc, Color.fromRGB(255, 92, 36));
+        world.spawnParticle(Particle.LARGE_SMOKE, loc, 14, 0.2, 0.2, 0.2, 0.025);
+        world.spawnParticle(Particle.CLOUD, loc, 8, 0.15, 0.15, 0.15, 0.04);
+        world.playSound(loc, Sound.ENTITY_FIREWORK_ROCKET_BLAST_FAR, 0.8f, 0.58f);
+        world.playSound(loc, Sound.BLOCK_BEACON_DEACTIVATE, 0.45f, 0.5f);
+    }
+
+    private static void requireFlash(World world, Location location, Color color) {
+        if (!ParticleEffectSupport.spawnFlash(world, location, color)) {
+            throw new IllegalStateException("不支持的 FLASH 粒子数据类型："
+                    + Particle.FLASH.getDataType().getName());
+        }
+    }
+
+    private void runEffectSafely(String stage, Runnable effect) {
+        if (disabledEffectStages.contains(stage)) {
+            return;
+        }
+        try {
+            effect.run();
+        } catch (RuntimeException ex) {
+            disabledEffectStages.add(stage);
+            plugin.getLogger().log(Level.WARNING,
+                    "特效阶段 " + stage + " 与当前服务端 API 不兼容，已禁用该阶段；制导主循环继续运行。", ex);
+        }
     }
 
     private void applyArrowProperties(AbstractArrow arrow) {

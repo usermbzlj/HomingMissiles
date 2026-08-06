@@ -28,3 +28,7 @@ server.properties
 # Secrets and local Maven settings
 .env
 settings.xml
+
+# Machine-specific release upload settings
+tools/upload-config.properties
+tools/deploy-config.properties

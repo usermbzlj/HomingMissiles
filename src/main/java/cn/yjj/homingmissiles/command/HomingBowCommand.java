@@ -439,6 +439,7 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
             return true;
         }
         SettingsManager.LoadReport report = settingsManager.reload();
+        plugin.refreshHudHosting();
         homingService.refreshHudResources();
         messages.send(sender, "reload", "warnings", report.warnings().size());
         sendWarnings(sender, report.warnings());
