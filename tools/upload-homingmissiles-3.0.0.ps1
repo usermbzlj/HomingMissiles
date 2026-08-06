@@ -473,8 +473,12 @@ try {
         ($scpArguments + @($localBundle, "${remoteEndpoint}:$remoteBundle")) `
         "SCP upload"
 
+    # PowerShell here-strings use the host platform's line endings. Normalize
+    # before base64 transport so Bash never receives a CR in tokens such as
+    # `set -Eeuo pipefail` when the uploader runs from Windows.
+    $normalizedRemoteScript = $remoteScript.Replace("`r`n", "`n").Replace("`r", "`n")
     $encodedScript = [Convert]::ToBase64String(
-        [System.Text.Encoding]::ASCII.GetBytes($remoteScript))
+        [System.Text.Encoding]::ASCII.GetBytes($normalizedRemoteScript))
     $includeHud = if ($SkipHudPack) { "0" } else { "1" }
     $remoteCommand = "printf '%s' '$encodedScript' | base64 -d | bash -s -- " +
         "'$remoteBundle' '$RemoteDirectory' '$expectedJarHash' '$expectedHudHash' '$includeHud'"
