@@ -4,11 +4,10 @@ import cn.yjj.homingmissiles.HomingMissilesPlugin;
 import cn.yjj.homingmissiles.config.SettingsManager;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
-
-import java.lang.reflect.Method;
 
 public final class HomingBowFactory {
     private final SettingsManager settingsManager;
@@ -34,17 +33,25 @@ public final class HomingBowFactory {
         meta.setDisplayName(settingsManager.current().bowName());
         meta.setLore(settingsManager.current().bowLore());
         meta.getPersistentDataContainer().set(homingBowKey, PersistentDataType.BYTE, (byte) 1);
-        trySetGlint(meta);
+        applyConfiguredEnchantments(meta);
         bow.setItemMeta(meta);
         return bow;
     }
 
-    private void trySetGlint(ItemMeta meta) {
-        try {
-            Method method = meta.getClass().getMethod("setEnchantmentGlintOverride", Boolean.class);
-            method.invoke(meta, Boolean.TRUE);
-        } catch (ReflectiveOperationException ignored) {
-            // API较旧或服务端实现缺失时，仅失去强制附魔光泽，不影响物品识别。
+    private void applyConfiguredEnchantments(ItemMeta meta) {
+        var settings = settingsManager.current();
+        if (settings.bowFlame()) {
+            meta.addEnchant(Enchantment.FLAME, 1, true);
+        }
+        if (settings.bowInfinity()) {
+            meta.addEnchant(Enchantment.INFINITY, 1, true);
+        }
+        if (settings.bowUnbreakable()) {
+            meta.addEnchant(Enchantment.UNBREAKING, 3, true);
+            meta.setUnbreakable(true);
+        }
+        if (settings.bowPowerLevel() > 0) {
+            meta.addEnchant(Enchantment.POWER, settings.bowPowerLevel(), true);
         }
     }
 }

@@ -1,6 +1,6 @@
 package org.bukkit;
 import org.bukkit.util.Vector;
-public class Location {
+public class Location implements Cloneable {
  public World getWorld() { return null; }
  public Vector toVector() { return null; }
  public double getX() { return 0; }
@@ -10,4 +10,6 @@ public class Location {
  public double distanceSquared(Location other) { return 0; }
  public double distance(Location other) { return Math.sqrt(distanceSquared(other)); }
  public Location add(double x, double y, double z) { return this; }
+ public Location add(Vector vector) { return this; }
+ public Location clone() { return this; }
 }

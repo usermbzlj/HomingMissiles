@@ -1,16 +1,20 @@
-# HomingMissiles 2.0.0
+# HomingMissiles 3.0.0
 # Paper/Purpur 1.21.x，Java 21。
 # 速度单位为“方块/tick”；正常服务器每秒20 tick。
 # 修改后可执行 /hbow reload。在线调参可使用 /hbow tune。
 
-config-version: 3
+config-version: 5
 
 tracking:
-  # 箭从当前位置搜索玩家目标的最大距离。
-  range: 48.0
+  # 首次捕获只在近圈发生，避免导弹凭空误锁非常远的新目标。
+  range: 80.0
 
-  # 最大飞行寿命。120 tick = 6秒。
-  max-lifetime-ticks: 120
+  # 一旦建立锁定，当前目标可在更大的保持圈内继续被追踪。
+  # 该值必须不小于 range；默认是首次捕获距离的 2.4 倍。
+  lock-retention-range: 192.0
+
+  # 最大飞行寿命。300 tick = 15秒，为远距拦截和二次追赶留出时间。
+  max-lifetime-ticks: 300
 
   # 发射后延迟多久开始索敌，避免刚离弦便急转。
   activation-delay-ticks: 4
@@ -18,14 +22,24 @@ tracking:
   # 每tick允许改变的最大飞行角度。
   turn-rate-degrees-per-tick: 8.0
 
-  # 每tick增加的速度。可设为轻微负值形成减速，但不能低于 min-speed。
-  acceleration-per-tick: 0.015
+  # 巡航段每tick增加的速度。可设为轻微负值，但不能低于 min-speed。
+  acceleration-per-tick: 0.025
 
-  min-speed: 1.0
-  max-speed: 2.8
+  min-speed: 1.2
+  max-speed: 3.4
+
+  # 后程发动机一旦点火就不会关闭。达到锁定时长，或者目标连续拉远时都会触发。
+  terminal-boost:
+    delay-ticks: 45
+    escape-trigger-ticks: 6
+    acceleration-per-tick: 0.075
+    max-speed: 5.6
 
   # 按目标当前速度预判若干tick后的位置。0表示不预判。
   lead-ticks: 4.0
+
+  # 动态截击解允许的最大预判时间；无可行截击解时向该上限提前瞄准。
+  max-lead-ticks: 24.0
 
   # true：允许飞行中切换到明显更近的目标。
   dynamic-retargeting: true
@@ -47,10 +61,10 @@ tracking:
 
 limits:
   # 全服务器同时在途的制导箭上限。
-  max-tracked-arrows: 256
+  max-tracked-arrows: 128
 
-  # 单个玩家同时在途的制导箭上限。
-  max-tracked-per-player: 32
+  # 单个玩家同时在途的制导箭上限。插件硬上限为4，管理员绕过权限也不能突破。
+  max-tracked-per-player: 4
 
   # 每次发射之间的冷却tick。0表示关闭。
   launch-cooldown-ticks: 0
@@ -60,8 +74,9 @@ limits:
   cancel-rejected-shot: true
 
 combat:
-  # -1：保留原版箭伤害；其他非负数：覆盖箭的基础伤害。
-  override-arrow-damage: -1.0
+  # 高伤害型默认值：伤害不会低于此值；-1表示完全保留原版计算。
+  # 采用“最低伤害”而非强制覆盖，因此力量附魔等更高结果仍会保留。
+  minimum-arrow-damage: 12.0
 
 worlds:
   # 按世界文件夹名称填写，不区分大小写。
@@ -71,33 +86,48 @@ worlds:
 
 visual:
   glowing-arrow: false
+  # 点火尾焰、白烟弹道、推进器闪光均由此总开关控制。
   particles: true
   particle-interval-ticks: 1
-  target-marker-particles: true
 
 audio:
+  # 使用火箭/弩机/信标/幽匿与监守者的分层原声音色，不再使用音符盒蜂鸣。
   launch-sound: true
   lock-sounds: true
 
 # 可选值：actionbar / chat / off
 # 高频战斗反馈默认走Action Bar，避免刷屏。
 feedback:
-  launch: actionbar
-  lock-shooter: actionbar
-  lock-target: actionbar
+  # 正常战斗态由像素 HMD 表达，不再用文字占用 ActionBar。
+  launch: off
+  lock-shooter: off
+  lock-target: off
   rejection: actionbar
 
-# AC7 风格持续 HUD / 被锁警报（不改变索敌与制导物理）。
+# 飞机头戴显示器风格的像素 HUD / 空间化来袭警报。
+# pixel-overlay 需要本项目生成的 HUD 资源包；加载成功后 ActionBar 只承载一枚图形字形，
+# 画面内容来自 PNG 像素纹理而不是文字。BossBar 仅在资源包未就绪时降级使用。
 hud:
   enabled: true
-  shooter-actionbar: true
-  target-actionbar: true
-  warning-beep: true
-  # 距离越近间隔越短；单位 tick（20 tick = 1秒）。
-  beep-min-interval-ticks: 2
-  beep-max-interval-ticks: 20
+  pixel-overlay: true
+  shooter-bossbar: true
+  target-bossbar: true
+  resource-pack:
+    # 必须是客户端能够公开访问的 HTTP/HTTPS 地址。留空时不主动发送资源包。
+    url: ''
+    # 填写对应 HUD ZIP 的 SHA-1（不是插件 JAR 的 SHA-256）。
+    sha1: ''
+    required: false
+    prompt: '&b启用像素化导弹头显'
+    # 若你已把 homingmissiles:hud 合并进 server.properties 的全服资源包，可设为 true。
+    assume-server-pack-provides-hud: false
+  warning-audio: true
+  # 来袭声从导弹方向空间化播放，距离越近节奏越紧；单位 tick（20 tick = 1秒）。
+  warning-min-interval-ticks: 4
+  warning-max-interval-ticks: 24
 
 effects:
+  launch: true
   impact: true
   self-destruct: true
 
@@ -116,10 +146,17 @@ commands:
 item:
   name: '&b&l制导弓'
   lore:
-    - '&7连续追踪最近的其他玩家'
-    - '&7每支箭独立识别并排除自己的发射者'
-    - '&7目标失效后动态重选；不使用瞬移'
-    - '&8多人、多箭并发 · 真实Motion转向'
+    - '&7高伤害制导武器 · 四联数据链'
+    - '&7目标遥测对发射者保密'
+    - '&7目标失效后动态重选 · 真实Motion转向'
+    - '&8每人最多 4 枚在途弹药'
+  enchantments:
+    # 各项均可独立关闭；默认开启。
+    flame: true
+    infinity: true
+    unbreakable: true
+    # 0关闭力量附魔，1～5为附魔等级。
+    power-level: 5
 
 # 所有消息支持 & 颜色符号和 {placeholder} 占位符。
 # 未列出的消息使用插件内置安全默认值。
@@ -137,10 +174,8 @@ messages:
   usage: '&e正确用法：&f{usage}'
 
   launch: '&a制导箭已发射 &8· &7在途 &f{active}/{limit}'
-  lock-shooter: '&c锁定 &f{target} &8· &7距离 &f{distance}格'
-  lock-target: '&c警告：你已被 &f{shooter} &c的制导箭锁定'
-  hud-shooter: '&eTRACK &7| &f{target} &7| &f{distance}m &7| {dir}'
-  hud-target: '&c⚠ MISSILE &7| &f{distance}m &7| {dir} &7| &f{shooter}'
+  guidance-link: '&b制导链路已建立。&7目标遥测已由系统保密。'
+  inbound-warning: '&4警告：&c侦测到来袭制导弹药。'
   rejected-permission: '&c你没有使用制导弓的权限。'
   rejected-global-limit: '&e全服在途制导箭已达到上限 {limit}。'
   rejected-player-limit: '&e你已有 {active}/{limit} 支制导箭在途。'

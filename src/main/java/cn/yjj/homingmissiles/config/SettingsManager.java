@@ -13,31 +13,40 @@ import java.util.Map;
 import java.util.Set;
 
 public final class SettingsManager {
-    public static final int CONFIG_VERSION = 3;
+    public static final int CONFIG_VERSION = 5;
+    public static final int HARD_MAX_TRACKED_PER_PLAYER = 4;
 
     private static final Map<String, Tunable> TUNABLES;
     private static final Map<String, Preset> PRESETS;
 
     static {
         Map<String, Tunable> tunables = new LinkedHashMap<>();
-        register(tunables, new Tunable("range", "tracking.range", 48.0, 4.0, 256.0, "索敌范围（格）"));
-        register(tunables, new Tunable("lifetime", "tracking.max-lifetime-ticks", 120.0, 20.0, 1200.0, "寿命（tick）"));
+        register(tunables, new Tunable("range", "tracking.range", 80.0, 4.0, 256.0, "首次捕获范围（格）"));
+        register(tunables, new Tunable("retention-range", "tracking.lock-retention-range", 192.0, 8.0, 512.0, "锁定保持范围（格）"));
+        register(tunables, new Tunable("lifetime", "tracking.max-lifetime-ticks", 300.0, 20.0, 1200.0, "寿命（tick）"));
         register(tunables, new Tunable("delay", "tracking.activation-delay-ticks", 4.0, 0.0, 100.0, "启动延迟（tick）"));
         register(tunables, new Tunable("turn", "tracking.turn-rate-degrees-per-tick", 8.0, 0.1, 180.0, "每tick最大转角（度）"));
-        register(tunables, new Tunable("acceleration", "tracking.acceleration-per-tick", 0.015, -0.2, 0.5, "每tick加速度"));
-        register(tunables, new Tunable("min-speed", "tracking.min-speed", 1.0, 0.05, 10.0, "最低速度"));
-        register(tunables, new Tunable("max-speed", "tracking.max-speed", 2.8, 0.05, 20.0, "最高速度"));
+        register(tunables, new Tunable("acceleration", "tracking.acceleration-per-tick", 0.025, -0.2, 0.5, "巡航段每tick加速度"));
+        register(tunables, new Tunable("min-speed", "tracking.min-speed", 1.2, 0.05, 10.0, "最低速度"));
+        register(tunables, new Tunable("max-speed", "tracking.max-speed", 3.4, 0.05, 20.0, "巡航段最高速度"));
+        register(tunables, new Tunable("terminal-delay", "tracking.terminal-boost.delay-ticks", 45.0, 0.0, 400.0, "后程助推延迟（tick）"));
+        register(tunables, new Tunable("terminal-acceleration", "tracking.terminal-boost.acceleration-per-tick", 0.075, 0.0, 2.0, "后程每tick加速度"));
+        register(tunables, new Tunable("terminal-max-speed", "tracking.terminal-boost.max-speed", 5.6, 0.05, 30.0, "后程最高速度"));
         register(tunables, new Tunable("lead", "tracking.lead-ticks", 4.0, 0.0, 40.0, "目标预判tick"));
+        register(tunables, new Tunable("max-lead", "tracking.max-lead-ticks", 24.0, 0.0, 100.0, "最大截击预判tick"));
         register(tunables, new Tunable("switch-advantage", "tracking.switch-advantage-blocks", 3.0, 0.0, 64.0, "切换目标所需距离优势"));
         TUNABLES = Collections.unmodifiableMap(tunables);
 
         Map<String, Preset> presets = new LinkedHashMap<>();
         presets.put("balanced", new Preset("balanced", "均衡", Map.of(
-                "turn", 8.0, "acceleration", 0.015, "min-speed", 1.0, "max-speed", 2.8, "lead", 4.0)));
+                "turn", 8.0, "acceleration", 0.025, "min-speed", 1.2, "max-speed", 3.4,
+                "terminal-acceleration", 0.075, "terminal-max-speed", 5.6, "lead", 4.0, "max-lead", 24.0)));
         presets.put("agile", new Preset("agile", "高机动", Map.of(
-                "turn", 14.0, "acceleration", 0.025, "min-speed", 1.1, "max-speed", 3.2, "lead", 5.0)));
+                "turn", 14.0, "acceleration", 0.04, "min-speed", 1.3, "max-speed", 3.8,
+                "terminal-acceleration", 0.1, "terminal-max-speed", 6.2, "lead", 5.0, "max-lead", 28.0)));
         presets.put("realistic", new Preset("realistic", "大转弯半径", Map.of(
-                "turn", 4.5, "acceleration", 0.008, "min-speed", 0.9, "max-speed", 2.4, "lead", 6.0)));
+                "turn", 4.5, "acceleration", 0.018, "min-speed", 1.0, "max-speed", 3.0,
+                "terminal-acceleration", 0.06, "terminal-max-speed", 5.0, "lead", 6.0, "max-lead", 30.0)));
         PRESETS = Collections.unmodifiableMap(presets);
     }
 
@@ -63,29 +72,65 @@ public final class SettingsManager {
                     + "；缺失的新字段将使用安全默认值。保留原文件，不会覆盖你的配置。");
         }
 
-        double range = boundedDouble(c, "tracking.range", 48.0, 1.0, 512.0, warnings);
-        int lifetime = boundedInt(c, "tracking.max-lifetime-ticks", 120, 1, 72000, warnings);
+        double range = boundedDouble(c, "tracking.range", 80.0, 1.0, 512.0, warnings);
+        double retentionRange = boundedDouble(c, "tracking.lock-retention-range", 192.0, 1.0, 1024.0, warnings);
+        if (retentionRange < range) {
+            warnings.add("tracking.lock-retention-range 小于首次捕获范围，已在内存中提升为 " + range);
+            retentionRange = range;
+        }
+        int lifetime = boundedInt(c, "tracking.max-lifetime-ticks", 300, 1, 72000, warnings);
         int delay = boundedInt(c, "tracking.activation-delay-ticks", 4, 0, 1200, warnings);
         double turn = boundedDouble(c, "tracking.turn-rate-degrees-per-tick", 8.0, 0.1, 180.0, warnings);
-        double acceleration = boundedDouble(c, "tracking.acceleration-per-tick", 0.015, -1.0, 2.0, warnings);
-        double minSpeed = boundedDouble(c, "tracking.min-speed", 1.0, 0.01, 20.0, warnings);
-        double maxSpeed = boundedDouble(c, "tracking.max-speed", 2.8, 0.01, 50.0, warnings);
+        double acceleration = boundedDouble(c, "tracking.acceleration-per-tick", 0.025, -1.0, 2.0, warnings);
+        double minSpeed = boundedDouble(c, "tracking.min-speed", 1.2, 0.01, 20.0, warnings);
+        double maxSpeed = boundedDouble(c, "tracking.max-speed", 3.4, 0.01, 50.0, warnings);
         if (maxSpeed < minSpeed) {
             warnings.add("tracking.max-speed 小于 min-speed，已在内存中提升为 " + minSpeed);
             maxSpeed = minSpeed;
         }
+        int terminalDelay = boundedInt(c, "tracking.terminal-boost.delay-ticks", 45, 0, 1200, warnings);
+        int terminalEscapeTrigger = boundedInt(c, "tracking.terminal-boost.escape-trigger-ticks", 6, 1, 100, warnings);
+        double terminalAcceleration = boundedDouble(
+                c, "tracking.terminal-boost.acceleration-per-tick", 0.075, 0.0, 3.0, warnings);
+        double terminalMaxSpeed = boundedDouble(c, "tracking.terminal-boost.max-speed", 5.6, 0.01, 60.0, warnings);
+        if (terminalMaxSpeed < maxSpeed) {
+            warnings.add("tracking.terminal-boost.max-speed 小于巡航最高速度，已在内存中提升为 " + maxSpeed);
+            terminalMaxSpeed = maxSpeed;
+        }
+        double leadTicks = boundedDouble(c, "tracking.lead-ticks", 4.0, 0.0, 100.0, warnings);
+        double maxLeadTicks = boundedDouble(c, "tracking.max-lead-ticks", 24.0, 0.0, 200.0, warnings);
+        if (maxLeadTicks < leadTicks) {
+            warnings.add("tracking.max-lead-ticks 小于基础预判，已在内存中提升为 " + leadTicks);
+            maxLeadTicks = leadTicks;
+        }
 
-        int globalLimit = boundedInt(c, "limits.max-tracked-arrows", 256, 1, 10000, warnings);
-        int perPlayerLimit = boundedInt(c, "limits.max-tracked-per-player", 32, 1, globalLimit, warnings);
+        int globalLimit = boundedInt(c, "limits.max-tracked-arrows", 128, 1, 10000, warnings);
+        int perPlayerLimit = boundedInt(c, "limits.max-tracked-per-player", 4, 1,
+                Math.min(globalLimit, HARD_MAX_TRACKED_PER_PLAYER), warnings);
         int cooldown = boundedInt(c, "limits.launch-cooldown-ticks", 0, 0, 1200, warnings);
         int particleInterval = boundedInt(c, "visual.particle-interval-ticks", 1, 1, 200, warnings);
         int pageSize = boundedInt(c, "commands.help-page-size", 7, 4, 12, warnings);
         int maxGive = boundedInt(c, "commands.max-give-amount", 64, 1, 2304, warnings);
-        int beepMin = boundedInt(c, "hud.beep-min-interval-ticks", 2, 1, 40, warnings);
-        int beepMax = boundedInt(c, "hud.beep-max-interval-ticks", 20, 1, 100, warnings);
-        if (beepMax < beepMin) {
-            warnings.add("hud.beep-max-interval-ticks 小于 min，已在内存中提升为 " + beepMin);
-            beepMax = beepMin;
+        int warningMin = boundedInt(c, "hud.warning-min-interval-ticks", 4, 1, 40, warnings);
+        int warningMax = boundedInt(c, "hud.warning-max-interval-ticks", 24, 1, 100, warnings);
+        if (warningMax < warningMin) {
+            warnings.add("hud.warning-max-interval-ticks 小于 min，已在内存中提升为 " + warningMin);
+            warningMax = warningMin;
+        }
+        int bowPowerLevel = boundedInt(c, "item.enchantments.power-level", 5, 0, 5, warnings);
+
+        String resourcePackUrl = c.getString("hud.resource-pack.url", "").trim();
+        if (!resourcePackUrl.isEmpty() && (!isHttpUrl(resourcePackUrl) || !isAscii(resourcePackUrl))) {
+            warnings.add("hud.resource-pack.url 必须是只含 ASCII 的 http/https URL，已禁用自动发送");
+            resourcePackUrl = "";
+        }
+        String resourcePackSha1 = c.getString("hud.resource-pack.sha1", "").trim().toLowerCase(Locale.ROOT);
+        if (!resourcePackSha1.isEmpty() && !resourcePackSha1.matches("[0-9a-f]{40}")) {
+            warnings.add("hud.resource-pack.sha1 必须是40位十六进制 SHA-1，已忽略");
+            resourcePackSha1 = "";
+        }
+        if (!resourcePackUrl.isEmpty() && resourcePackSha1.isEmpty()) {
+            warnings.add("hud.resource-pack.url 已配置但 sha1 为空；建议填写构建产物的 SHA-1 以启用客户端缓存与完整性校验");
         }
 
         Set<String> disabledWorlds = new LinkedHashSet<>();
@@ -100,13 +145,19 @@ public final class SettingsManager {
         current = new PluginSettings(
                 configVersion,
                 range,
+                retentionRange,
                 lifetime,
                 delay,
                 turn,
                 acceleration,
                 minSpeed,
                 maxSpeed,
-                boundedDouble(c, "tracking.lead-ticks", 4.0, 0.0, 100.0, warnings),
+                terminalDelay,
+                terminalEscapeTrigger,
+                terminalAcceleration,
+                terminalMaxSpeed,
+                leadTicks,
+                maxLeadTicks,
                 c.getBoolean("tracking.dynamic-retargeting", true),
                 boundedDouble(c, "tracking.switch-advantage-blocks", 3.0, 0.0, 256.0, warnings),
                 c.getBoolean("tracking.require-line-of-sight", false),
@@ -118,13 +169,13 @@ public final class SettingsManager {
                 perPlayerLimit,
                 cooldown,
                 c.getBoolean("limits.cancel-rejected-shot", true),
-                c.getDouble("combat.override-arrow-damage", -1.0),
+                boundedDouble(c, "combat.minimum-arrow-damage", 12.0, -1.0, 100.0, warnings),
                 c.getBoolean("visual.glowing-arrow", false),
                 c.getBoolean("visual.particles", true),
                 particleInterval,
-                c.getBoolean("visual.target-marker-particles", true),
                 c.getBoolean("audio.launch-sound", true),
                 c.getBoolean("audio.lock-sounds", true),
+                c.getBoolean("effects.launch", true),
                 c.getBoolean("effects.impact", true),
                 c.getBoolean("effects.self-destruct", true),
                 c.getBoolean("lifecycle.remove-arrows-on-disable", true),
@@ -135,13 +186,23 @@ public final class SettingsManager {
                 feedback(c, "feedback.lock-target", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 feedback(c, "feedback.rejection", PluginSettings.FeedbackMode.ACTIONBAR, warnings),
                 c.getBoolean("hud.enabled", true),
-                c.getBoolean("hud.shooter-actionbar", true),
-                c.getBoolean("hud.target-actionbar", true),
-                c.getBoolean("hud.warning-beep", true),
-                beepMin,
-                beepMax,
+                c.getBoolean("hud.pixel-overlay", true),
+                c.getBoolean("hud.shooter-bossbar", true),
+                c.getBoolean("hud.target-bossbar", true),
+                resourcePackUrl,
+                resourcePackSha1,
+                c.getBoolean("hud.resource-pack.required", false),
+                color(c.getString("hud.resource-pack.prompt", "&b启用像素化导弹头显")),
+                c.getBoolean("hud.resource-pack.assume-server-pack-provides-hud", false),
+                c.getBoolean("hud.warning-audio", true),
+                warningMin,
+                warningMax,
                 color(c.getString("item.name", "&b&l制导弓")),
                 colorList(c.getStringList("item.lore")),
+                c.getBoolean("item.enchantments.flame", true),
+                c.getBoolean("item.enchantments.infinity", true),
+                c.getBoolean("item.enchantments.unbreakable", true),
+                bowPowerLevel,
                 Collections.unmodifiableMap(messages),
                 pageSize,
                 maxGive
@@ -215,13 +276,18 @@ public final class SettingsManager {
         PluginSettings s = current;
         return switch (tunable.key()) {
             case "range" -> s.trackingRange();
+            case "retention-range" -> s.lockRetentionRange();
             case "lifetime" -> s.maxLifetimeTicks();
             case "delay" -> s.activationDelayTicks();
             case "turn" -> s.turnRateDegreesPerTick();
             case "acceleration" -> s.accelerationPerTick();
             case "min-speed" -> s.minSpeed();
             case "max-speed" -> s.maxSpeed();
+            case "terminal-delay" -> s.terminalBoostDelayTicks();
+            case "terminal-acceleration" -> s.terminalAccelerationPerTick();
+            case "terminal-max-speed" -> s.terminalMaxSpeed();
             case "lead" -> s.leadTicks();
+            case "max-lead" -> s.maxLeadTicks();
             case "switch-advantage" -> s.switchAdvantageBlocks();
             default -> throw new IllegalArgumentException("未映射的参数：" + tunable.key());
         };
@@ -233,6 +299,15 @@ public final class SettingsManager {
 
     private static String normalizeKey(String raw) {
         return raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    private static boolean isHttpUrl(String value) {
+        String normalized = value.toLowerCase(Locale.ROOT);
+        return normalized.startsWith("https://") || normalized.startsWith("http://");
+    }
+
+    private static boolean isAscii(String value) {
+        return value.chars().allMatch(character -> character >= 0x20 && character <= 0x7e);
     }
 
     private static boolean isIntegerPath(String path) {
@@ -296,10 +371,8 @@ public final class SettingsManager {
         m.put("internal-error", "&c命令执行失败。错误编号：&f{reference}&c，请查看服务端日志。");
         m.put("usage", "&e正确用法：&f{usage}");
         m.put("launch", "&a制导箭已发射 &8· &7在途 &f{active}/{limit}");
-        m.put("lock-shooter", "&c锁定 &f{target} &8· &7距离 &f{distance}格");
-        m.put("lock-target", "&c警告：你已被 &f{shooter} &c的制导箭锁定");
-        m.put("hud-shooter", "&eTRACK &7| &f{target} &7| &f{distance}m &7| {dir}");
-        m.put("hud-target", "&c⚠ MISSILE &7| &f{distance}m &7| {dir} &7| &f{shooter}");
+        m.put("guidance-link", "&b制导链路已建立。&7目标遥测已由系统保密。");
+        m.put("inbound-warning", "&4警告：&c侦测到来袭制导弹药。");
         m.put("rejected-permission", "&c你没有使用制导弓的权限。");
         m.put("rejected-global-limit", "&e全服在途制导箭已达到上限 {limit}。");
         m.put("rejected-player-limit", "&e你已有 {active}/{limit} 支制导箭在途。");

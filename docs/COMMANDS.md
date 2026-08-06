@@ -63,8 +63,8 @@
 
 - 主手是否为有效制导弓
 - 在途箭数量
-- 每支箭当前目标
-- 年龄、速度和所在世界
+- 自检时不会显示目标、距离、方向、速度或世界等遥测
+- 管理员检查其他玩家时才显示每支箭的诊断细节
 
 检查自己：`homingmissiles.command.inspect.self`  
 检查他人：`homingmissiles.command.inspect.others`
@@ -104,13 +104,17 @@
 可调参数：
 
 - `range`
+- `retention-range`
 - `lifetime`
 - `delay`
 - `turn`
 - `acceleration`
 - `min-speed`
 - `max-speed`
+- `terminal-acceleration`
+- `terminal-max-speed`
 - `lead`
+- `max-lead`
 - `switch-advantage`
 
 ### `/hbow tune reset <参数>`
@@ -161,5 +165,5 @@
 |---|---:|---|
 | `homingmissiles.use` | 所有人 | 使用制导弓 |
 | `homingmissiles.target.exempt` | 无 | 不会被选为目标 |
-| `homingmissiles.bypass.limits` | OP | 绕过全服/个人上限和冷却 |
+| `homingmissiles.bypass.limits` | OP | 绕过全服上限和冷却；每人 4 枚硬上限不可绕过 |
 | `homingmissiles.admin` | OP | 继承主要管理权限 |
