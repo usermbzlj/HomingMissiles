@@ -66,6 +66,7 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
         String sub = args[0].toLowerCase(Locale.ROOT);
         return switch (sub) {
             case "help", "?" -> handleHelp(sender, label, args);
+            case "hud" -> handleHud(sender, label, args);
             case "get" -> handleGet(sender, label, args);
             case "give" -> handleGive(sender, label, args);
             case "status" -> handleStatus(sender, label, args);
@@ -84,6 +85,43 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
                 yield true;
             }
         };
+    }
+
+    private boolean handleHud(CommandSender sender, String label, String[] args) {
+        if (!require(sender, "homingmissiles.command.hud")) {
+            return true;
+        }
+        if (!(sender instanceof Player player)) {
+            messages.send(sender, "player-only");
+            return true;
+        }
+        if (args.length > 2) {
+            usage(sender, label, "hud [on|off|toggle|status]");
+            return true;
+        }
+        String operation = args.length == 1 ? "toggle" : args[1].toLowerCase(Locale.ROOT);
+        boolean enabled;
+        switch (operation) {
+            case "on" -> enabled = homingService.setHudEnabled(player, true);
+            case "off" -> enabled = homingService.setHudEnabled(player, false);
+            case "toggle" -> enabled = homingService.toggleHud(player);
+            case "status" -> {
+                enabled = homingService.isHudEnabled(player);
+                messages.sendRaw(player, "&8[&b制导箭&8] &7完整 HUD："
+                        + (enabled ? "&a开启" : "&e关闭")
+                        + " &8· &7模式：&f" + homingService.hudDeliveryMode(player)
+                        + " &8· &7锁定进度：&a始终保留");
+                return true;
+            }
+            default -> {
+                usage(sender, label, "hud [on|off|toggle|status]");
+                return true;
+            }
+        }
+        messages.sendRaw(player, enabled
+                ? "&8[&b制导箭&8] &a完整飞行 HUD 已开启。&7模式：&f" + homingService.hudDeliveryMode(player)
+                : "&8[&b制导箭&8] &e完整飞行 HUD 已关闭。&7手动锁定进度仍会显示。");
+        return true;
     }
 
     private boolean handleHelp(CommandSender sender, String label, String[] args) {
@@ -556,6 +594,8 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
     private void registerHelp() {
         addHelp("help", "homingmissiles.command.help", "help [页码|子命令]", "查看分页帮助或某条命令的详细说明",
                 "只显示你有权限使用的命令。", "支持 /hbow help tune 这种定向帮助。");
+        addHelp("hud", "homingmissiles.command.hud", "hud [on|off|toggle|status]", "开关自己的完整飞行 HUD",
+                "关闭后仍显示拉弓手动锁定进度。", "安装客户端 Mod 时按 H 也可切换，设置会同步到服务器。");
         addHelp("get", "homingmissiles.command.get", "get [数量]", "给自己领取制导弓",
                 "背包满时物品会安全掉落在脚下。", "数量上限由 commands.max-give-amount 控制。");
         addHelp("give", "homingmissiles.command.give", "give <玩家> [数量]", "向在线玩家发放制导弓",
@@ -606,6 +646,9 @@ public final class HomingBowCommand implements CommandExecutor, TabCompleter {
             }
             if (sub.equals("get") && args.length == 2) {
                 return CommandUtil.filterPrefix(List.of("1", "2", "4", "8", "16"), args[1]);
+            }
+            if (sub.equals("hud") && args.length == 2) {
+                return CommandUtil.filterPrefix(List.of("on", "off", "toggle", "status"), args[1]);
             }
             if (sub.equals("give")) {
                 if (args.length == 2) {

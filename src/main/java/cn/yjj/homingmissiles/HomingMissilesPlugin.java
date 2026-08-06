@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.util.logging.Level;
 
 public final class HomingMissilesPlugin extends JavaPlugin {
-    public static final String VERSION = "3.0.0";
+    public static final String VERSION = "3.1.0";
 
     private SettingsManager settingsManager;
     private MessageService messages;
@@ -34,7 +34,7 @@ public final class HomingMissilesPlugin extends JavaPlugin {
         refreshHudHosting();
         messages = new MessageService(settingsManager);
         bowFactory = new HomingBowFactory(this, settingsManager);
-        LockHudService lockHud = new LockHudService(settingsManager);
+        LockHudService lockHud = new LockHudService(this, settingsManager);
         homingService = new HomingService(this, settingsManager, messages, bowFactory, lockHud);
 
         getServer().getPluginManager().registerEvents(

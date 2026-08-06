@@ -197,6 +197,22 @@ public final class HomingService {
         lockHud.preparePlayer(player);
     }
 
+    public boolean isHudEnabled(Player player) {
+        return lockHud.isPlayerHudEnabled(player);
+    }
+
+    public boolean setHudEnabled(Player player, boolean enabled) {
+        return lockHud.setPlayerHudEnabled(player, enabled);
+    }
+
+    public boolean toggleHud(Player player) {
+        return lockHud.togglePlayerHud(player);
+    }
+
+    public String hudDeliveryMode(Player player) {
+        return lockHud.deliveryMode(player);
+    }
+
     public void handleResourcePackStatus(PlayerResourcePackStatusEvent event) {
         lockHud.handleResourcePackStatus(event);
     }

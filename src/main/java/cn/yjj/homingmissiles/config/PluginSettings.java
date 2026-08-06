@@ -53,6 +53,8 @@ public record PluginSettings(
         FeedbackMode rejectionFeedback,
         boolean hudEnabled,
         boolean pixelHudEnabled,
+        String hudClientModDownloadUrl,
+        int hudClientModDetectionTicks,
         boolean shooterBossBar,
         boolean targetBossBar,
         String hudResourcePackUrl,

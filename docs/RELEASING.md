@@ -40,6 +40,7 @@ world*/
 ```bash
 bash tools/verify-offline.sh
 mvn -U clean package
+cd client-mod && ./gradlew build && cd ..
 ```
 
 Windows：
@@ -47,12 +48,13 @@ Windows：
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 mvn -U clean package
+Push-Location .\client-mod; .\gradlew.bat build; Pop-Location
 ```
 
 ## 4. 检查 JAR
 
 ```bash
-jar tf target/HomingMissiles-3.0.0.jar
+jar tf target/HomingMissiles-3.1.0.jar
 ```
 
 必须包含：
@@ -77,11 +79,11 @@ test/
 检查版本：
 
 ```bash
-unzip -p target/HomingMissiles-3.0.0.jar plugin.yml
-unzip -p target/HomingMissiles-3.0.0.jar META-INF/MANIFEST.MF
+unzip -p target/HomingMissiles-3.1.0.jar plugin.yml
+unzip -p target/HomingMissiles-3.1.0.jar META-INF/MANIFEST.MF
 ```
 
-同时检查 `target/hud-packs/` 中存在两个 ZIP、两个 `.sha1` 和预览 PNG。解压 ZIP 后必须包含 `pack.mcmeta`、`assets/homingmissiles/font/hud.json`、像素纹理、`sounds.json` 和四个 `sounds/hud/*.ogg`；确认字体包含 `U+E0FF = -193` 的负间距，并人工检查预览中的航向/速度/高度滑尺、俯仰梯、飞行矢量、黄色标定框、绿色 `LOCK`、四挂点和三种威胁颜色均无裁切。
+同时检查 `target/hud-packs/` 中存在两个 ZIP、两个 `.sha1` 和预览 PNG。解压 ZIP 后必须包含 `hud.json`、居中 Title 使用的 `hud_title.json`、像素纹理、`sounds.json` 和四个 OGG；分别确认负间距为 `-193` / `-49`。检查 `client-mod/build/libs/HomingMissiles-HUD-Fabric-1.21.11-3.1.0.jar` 包含 `fabric.mod.json`、客户端类、语言文件与同一组音频，且不发布 `-sources.jar`。
 
 ## 5. 实机测试
 
@@ -102,15 +104,19 @@ unzip -p target/HomingMissiles-3.0.0.jar META-INF/MANIFEST.MF
 Linux：
 
 ```bash
-sha256sum target/HomingMissiles-3.0.0.jar > SHA256SUMS.txt
+sha256sum target/HomingMissiles-3.1.0.jar \
+  client-mod/build/libs/HomingMissiles-HUD-Fabric-1.21.11-3.1.0.jar \
+  target/hud-packs/*.zip > SHA256SUMS.txt
 sha1sum target/hud-packs/*.zip
 ```
 
 PowerShell：
 
 ```powershell
-Get-FileHash .\target\HomingMissiles-3.0.0.jar -Algorithm SHA256
-Get-FileHash .\target\hud-packs\*.zip -Algorithm SHA1
+Get-FileHash .\target\HomingMissiles-3.1.0.jar -Algorithm SHA256
+Get-FileHash .\client-mod\build\libs\HomingMissiles-HUD-Fabric-1.21.11-3.1.0.jar -Algorithm SHA256
+Get-ChildItem .\target\hud-packs\*.zip | Get-FileHash -Algorithm SHA256
+Get-ChildItem .\target\hud-packs\*.zip | Get-FileHash -Algorithm SHA1
 ```
 
 ## 7. 发布内容
@@ -119,6 +125,7 @@ Get-FileHash .\target\hud-packs\*.zip -Algorithm SHA1
 
 - 插件 JAR；
 - 对应游戏版本的像素 HUD 资源包及其 SHA-1；
+- Fabric 1.21.11 客户端 HUD Mod；
 - 快速安装包；
 - 源码包；
 - SHA-256；

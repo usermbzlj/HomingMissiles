@@ -26,7 +26,7 @@ HomingMissilesPlugin
 
 `ManualLockService` 在拉弓期间扫描射手视野内的有效玩家，以视线、距离和视锥角筛选唯一候选，维护进度、断锁容错与平滑屏幕坐标。完整锁定只能被下一次射击消费一次。
 
-`LockHudService` 在每个制导 tick 聚合标定、出站与来袭状态，并对视角、速度、高度、离地高度和标定框位置做逐 tick 插值。它把 535 个字形中的基础、细粒度飞行仪表、标定框/进度、挂点和来袭层用负间距组合成 ActionBar 图层流。资源包不可用时才维护 BossBar 和原版声音降级。
+`LockHudService` 在每个制导 tick 聚合标定、出站与来袭状态。登录后先等待 `homingmissiles:control` 握手：Fabric Mod 客户端收到最小状态包并逐帧渲染；未握手客户端才进入资源包路径。纯服务端路径对遥测和标定框逐 tick 插值，把 535 个字形用负间距组合成居中 Title 图层流；资源包不可用时维护 BossBar。个人关闭完整 HUD 后，锁定状态仍继续投递。
 
 `HomingMissilesPlugin` 是组合根。其他组件不应通过静态全局单例重新定位服务。
 

@@ -9,6 +9,17 @@
 
 显示主手是否为有效制导弓、自己的在途箭数量和常用命令入口。
 
+## HUD 开关
+
+### `/hbow hud [on|off|toggle|status]`
+
+- 不带参数等价于 `toggle`。
+- `off` 关闭完整鞘翅飞行 HUD，但拉弓手动锁定框和进度始终保留。
+- `status` 同时显示当前偏好和实际投递模式：Fabric Mod、纯服务端资源包、BossBar 或检测中。
+- 安装客户端 Mod 后，默认 `H` 键执行同一切换并把结果持久化到服务端。
+
+权限：`homingmissiles.command.hud`（默认所有玩家）
+
 ## 帮助
 
 ### `/hbow help [页码|子命令]`

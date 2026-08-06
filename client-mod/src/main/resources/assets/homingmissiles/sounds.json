@@ -1,0 +1,14 @@
+{
+  "hud.lock_confirm": {
+    "sounds": ["homingmissiles:hud/lock_confirm"]
+  },
+  "hud.launch": {
+    "sounds": ["homingmissiles:hud/launch"]
+  },
+  "hud.missile_warning": {
+    "sounds": ["homingmissiles:hud/missile_warning"]
+  },
+  "hud.missile_critical": {
+    "sounds": ["homingmissiles:hud/missile_critical"]
+  }
+}
