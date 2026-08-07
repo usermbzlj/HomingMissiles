@@ -150,6 +150,23 @@ public final class HudFormat {
         return (char) (HEIGHT_GLYPH_BASE + bucket);
     }
 
+    /**
+     * Projects a world-space target onto normalized HUD horizontal coordinates.
+     * Negative is screen-left and positive is screen-right.
+     */
+    public static double targetScreenX(float viewerYawDegrees,
+                                       double deltaX, double deltaZ,
+                                       double coneDegrees) {
+        if (!Float.isFinite(viewerYawDegrees)
+                || !Double.isFinite(deltaX) || !Double.isFinite(deltaZ)
+                || !Double.isFinite(coneDegrees) || coneDegrees <= 0.0
+                || deltaX * deltaX + deltaZ * deltaZ < 1.0E-8) {
+            return 0.0;
+        }
+        double targetYaw = Math.toDegrees(Math.atan2(-deltaX, deltaZ));
+        return clamp(wrapDegrees(targetYaw - viewerYawDegrees) / coneDegrees, -1.0, 1.0);
+    }
+
     public static char progradeGlyph(float viewerYawDegrees, float viewerPitchDegrees,
                                      double velocityX, double velocityY, double velocityZ) {
         double horizontal = Math.hypot(velocityX, velocityZ);

@@ -14,9 +14,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ReleaseVersion = "3.1.2"
-$ReleaseJarName = "HomingMissiles-3.1.2.jar"
-$InstallerName = "replace-homingmissiles-3.1.2.sh"
+$ReleaseVersion = "3.1.3"
+$ReleaseJarName = "HomingMissiles-3.1.3.jar"
+$InstallerName = "replace-homingmissiles-3.1.3.sh"
 $HudPackName = "HomingMissiles-HUD-1.21.11.zip"
 $ChecksumName = "SHA256SUMS.txt"
 $DeployConfigName = "deploy-config.properties"
@@ -249,9 +249,9 @@ if (-not [int]::TryParse([string]$deploySettings["startup_timeout"], [ref]$confi
 $checksumText = Get-Content -LiteralPath $checksum -Raw
 $jarMatch = [regex]::Match(
     $checksumText,
-    '(?im)^([0-9a-f]{64})[ \t]+HomingMissiles-3\.1\.2\.jar\s*$')
+    '(?im)^([0-9a-f]{64})[ \t]+HomingMissiles-3\.1\.3\.jar\s*$')
 if (-not $jarMatch.Success) {
-    Fail "$ChecksumName does not contain the 3.1.2 JAR checksum"
+    Fail "$ChecksumName does not contain the 3.1.3 JAR checksum"
 }
 $expectedJarHash = $jarMatch.Groups[1].Value.ToLowerInvariant()
 $actualJarHash = Get-HashLower $releaseJar "SHA256"
@@ -348,13 +348,13 @@ done
 dest_real="$(realpath -e -- "$dest")"
 bundle_real="$(realpath -e -- "$bundle")"
 case "$bundle_real" in
-    "$dest_real"/.homingmissiles-upload-3.1.2-*.zip) ;;
+    "$dest_real"/.homingmissiles-upload-3.1.3-*.zip) ;;
     *) echo "unsafe upload bundle path: $bundle_real" >&2; exit 1 ;;
 esac
 
-stage="$(mktemp -d "$dest_real/.homingmissiles-stage-3.1.2.XXXXXXXX")"
+stage="$(mktemp -d "$dest_real/.homingmissiles-stage-3.1.3.XXXXXXXX")"
 case "$stage" in
-    "$dest_real"/.homingmissiles-stage-3.1.2.*) ;;
+    "$dest_real"/.homingmissiles-stage-3.1.3.*) ;;
     *) echo "unsafe staging path: $stage" >&2; exit 1 ;;
 esac
 temporary_files=()
@@ -363,7 +363,7 @@ cleanup() {
     for path in "${temporary_files[@]:-}"; do
         [[ -z "$path" ]] || rm -f -- "$path"
     done
-    if [[ -n "${stage:-}" && -d "$stage" && "$stage" == "$dest_real"/.homingmissiles-stage-3.1.2.* ]]; then
+    if [[ -n "${stage:-}" && -d "$stage" && "$stage" == "$dest_real"/.homingmissiles-stage-3.1.3.* ]]; then
         rm -rf -- "$stage"
     fi
     rm -f -- "$bundle_real"
@@ -395,7 +395,7 @@ else
 fi
 
 cd "$stage"
-required=(HomingMissiles-3.1.2.jar replace-homingmissiles-3.1.2.sh SHA256SUMS.txt deploy-config.properties)
+required=(HomingMissiles-3.1.3.jar replace-homingmissiles-3.1.3.sh SHA256SUMS.txt deploy-config.properties)
 if [[ "$include_hud" == 1 ]]; then
     required+=(HomingMissiles-HUD-1.21.11.zip HomingMissiles-HUD-1.21.11.zip.sha1)
 fi
@@ -403,11 +403,11 @@ for name in "${required[@]}"; do
     [[ -f "$name" ]] || { echo "missing bundle file: $name" >&2; exit 1; }
 done
 
-actual_jar="$(sha256sum -- HomingMissiles-3.1.2.jar | awk '{print tolower($1)}')"
+actual_jar="$(sha256sum -- HomingMissiles-3.1.3.jar | awk '{print tolower($1)}')"
 [[ "$actual_jar" == "$expected_jar" ]] || { echo "remote JAR hash mismatch" >&2; exit 1; }
-grep -Eiq "^${expected_jar}[[:space:]]+HomingMissiles-3\.1\.2\.jar[[:space:]]*$" SHA256SUMS.txt
-grep -Fq "readonly EXPECTED_SHA256=\"$expected_jar\"" replace-homingmissiles-3.1.2.sh
-bash -n replace-homingmissiles-3.1.2.sh
+grep -Eiq "^${expected_jar}[[:space:]]+HomingMissiles-3\.1\.3\.jar[[:space:]]*$" SHA256SUMS.txt
+grep -Fq "readonly EXPECTED_SHA256=\"$expected_jar\"" replace-homingmissiles-3.1.3.sh
+bash -n replace-homingmissiles-3.1.3.sh
 
 if [[ "$include_hud" == 1 ]]; then
     actual_hud="$(sha1sum -- HomingMissiles-HUD-1.21.11.zip | awk '{print tolower($1)}')"
@@ -424,8 +424,8 @@ promote() {
     mv -fT -- "$temporary" "$dest_real/$name"
 }
 
-promote HomingMissiles-3.1.2.jar 0644
-promote replace-homingmissiles-3.1.2.sh 0755
+promote HomingMissiles-3.1.3.jar 0644
+promote replace-homingmissiles-3.1.3.sh 0755
 promote SHA256SUMS.txt 0644
 promote deploy-config.properties 0600
 if [[ "$include_hud" == 1 ]]; then
@@ -433,13 +433,13 @@ if [[ "$include_hud" == 1 ]]; then
     promote HomingMissiles-HUD-1.21.11.zip.sha1 0644
 fi
 
-final_jar="$(sha256sum -- "$dest_real/HomingMissiles-3.1.2.jar" | awk '{print tolower($1)}')"
+final_jar="$(sha256sum -- "$dest_real/HomingMissiles-3.1.3.jar" | awk '{print tolower($1)}')"
 [[ "$final_jar" == "$expected_jar" ]] || { echo "promoted JAR hash mismatch" >&2; exit 1; }
 printf 'UPLOAD=PASS\nREMOTE_DIR=%s\nJAR_SHA256=%s\n' "$dest_real" "$final_jar"
 if [[ "$include_hud" == 1 ]]; then
     printf 'HUD_SHA1=%s\n' "$expected_hud"
 fi
-printf 'NEXT=sudo bash %s/replace-homingmissiles-3.1.2.sh\n' "$dest_real"
+printf 'NEXT=sudo bash %s/replace-homingmissiles-3.1.3.sh\n' "$dest_real"
 '@
 
 $archive = $null

@@ -65,6 +65,14 @@ public final class HudFormatTest {
         equal(HudFormat.altitudeGlyph(999.0), '\uE230', "altitude upper clamp");
         equal(HudFormat.heightGlyph(0.0), '\uE231', "ground height layer");
         equal(HudFormat.heightGlyph(999.0), '\uE271', "height upper clamp");
+        near(HudFormat.targetScreenX(0f, 10.0, 0.0, 90.0), -1.0, 1.0E-9,
+                "facing south puts east target on screen left");
+        near(HudFormat.targetScreenX(0f, -10.0, 0.0, 90.0), 1.0, 1.0E-9,
+                "facing south puts west target on screen right");
+        near(HudFormat.targetScreenX(180f, 10.0, 0.0, 90.0), 1.0, 1.0E-9,
+                "facing north puts east target on screen right");
+        near(HudFormat.targetScreenX(180f, -10.0, 0.0, 90.0), -1.0, 1.0E-9,
+                "facing north puts west target on screen left");
         equal(HudFormat.progradeGlyph(0f, 0f, 0.0, 0.0, 0.0), '\uE28A', "stationary prograde");
         equal(HudFormat.lockMarkerGlyph(0.0, 0.0, false), '\uE2BB', "acquiring marker center");
         equal(HudFormat.lockMarkerGlyph(0.0, 0.0, true), '\uE2EC', "locked marker center");
