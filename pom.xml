@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>cn.yjj</groupId>
     <artifactId>homing-missiles</artifactId>
-    <version>3.1.3</version>
+    <version>3.1.4</version>
     <name>HomingMissiles</name>
     <description>Professional multi-player, multi-arrow physical homing bow plugin</description>
 
@@ -32,7 +32,7 @@
     </dependencies>
 
     <build>
-        <finalName>HomingMissiles-3.1.3</finalName>
+        <finalName>HomingMissiles-3.1.4</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -47,7 +47,7 @@
                     <archive>
                         <manifestEntries>
                             <Implementation-Title>HomingMissiles</Implementation-Title>
-                            <Implementation-Version>3.1.3</Implementation-Version>
+                            <Implementation-Version>3.1.4</Implementation-Version>
                         </manifestEntries>
                     </archive>
                 </configuration>

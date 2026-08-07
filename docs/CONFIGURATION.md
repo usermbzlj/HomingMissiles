@@ -4,18 +4,18 @@
 
 ## tracking
 
-- `range`：手动标定距离，默认 `80`。拉弓时只在这个近圈内筛选玩家。
-- `lock-retention-range`：锁定保持距离，默认 `192`，且不能小于 `range`。已锁目标即使飞出捕获圈，仍会在保持圈内被追踪。
+- `range`：手动标定距离，默认 `96`。拉弓时只在这个近圈内筛选玩家；可用 `/hbow tune range <4～256>` 在线调整。
+- `lock-retention-range`：锁定保持距离，默认 `224`，且不能小于 `range`。已锁目标即使飞出捕获圈，仍会在保持圈内被追踪；在线允许 `8～512` 格。
 - `max-lifetime-ticks`：飞行寿命。20 tick = 1秒。
 - `activation-delay-ticks`：离弦后延迟索敌，防止立即反折。
 - `turn-rate-degrees-per-tick`：每 tick 最大转向角。越大越灵敏。
 - `acceleration-per-tick`：巡航段每 tick 速度变化。
-- `min-speed` / `max-speed`：巡航速度下限和上限，默认 `1.2` / `3.4` 格/tick。
+- `min-speed` / `max-speed`：巡航速度下限和上限，默认 `1.0` / `3.2` 格/tick。
 - `lead-ticks`：动态截击解的最小预判时间。
 - `max-lead-ticks`：动态截击解的最大预判时间；目标当前速度高于导弹、没有实数截击解时，会向这个上限提前瞄准。
 - `terminal-boost.delay-ticks`：持续锁定达到该时长后点燃后程发动机。
 - `terminal-boost.escape-trigger-ticks`：目标连续拉远达到该时长后提前点火。
-- `terminal-boost.acceleration-per-tick` / `max-speed`：后程加速度与最高速度，默认 `0.075` / `5.6` 格/tick。
+- `terminal-boost.acceleration-per-tick` / `max-speed`：后程加速度与最高速度，默认 `0.06` / `4.8` 格/tick。
 - `dynamic-retargeting` / `switch-advantage-blocks`：6 版不再动态换人，保留这两个键仅为旧配置兼容。
 - `require-line-of-sight`：要求无遮挡；开启会增加成本。
 - `target-creative` / `target-spectator`：是否追踪对应模式。
@@ -24,10 +24,10 @@
 
 ## targeting.manual-lock
 
-- `duration-ticks`：目标持续位于标定视锥内多久才完成锁定，默认 `16` tick。
-- `cone-degrees`：开始标定的中央视锥半角，默认 `10°`。
-- `break-cone-degrees`：已锁目标允许的较大保持半角，默认 `16°`，不能小于开始视锥。
-- `break-grace-ticks`：短暂移出视锥时保留锁定的容错时间，默认 `4` tick。
+- `duration-ticks`：目标持续位于标定视锥内多久才完成锁定，默认 `18` tick。
+- `cone-degrees`：开始标定的中央视锥半角，默认 `9°`。
+- `break-cone-degrees`：已锁目标允许的较大保持半角，默认 `14°`，不能小于开始视锥。
+- `break-grace-ticks`：短暂移出视锥时保留锁定的容错时间，默认 `5` tick。
 
 玩家必须正在使用由插件发放的制导弓，并把一个有效、可见且无遮挡的玩家保持在视锥内。完成锁定后，下一次松弦会消费这次锁定并把目标 UUID 写入箭 PDC；未完成锁定会无条件取消这一发，即使 `limits.cancel-rejected-shot` 为 `false`。锁定是单次的，每发都必须重新标定。
 
@@ -141,13 +141,13 @@ visual:
 ### balanced
 
 ```yaml
-turn-rate-degrees-per-tick: 8.0
-acceleration-per-tick: 0.025
-min-speed: 1.2
-max-speed: 3.4
+turn-rate-degrees-per-tick: 7.0
+acceleration-per-tick: 0.015
+min-speed: 1.0
+max-speed: 3.2
 terminal-boost:
-  acceleration-per-tick: 0.075
-  max-speed: 5.6
+  acceleration-per-tick: 0.06
+  max-speed: 4.8
 lead-ticks: 4.0
 max-lead-ticks: 24.0
 ```

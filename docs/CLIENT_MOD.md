@@ -17,11 +17,11 @@
 - Minecraft Java Edition `1.21.11`
 - Fabric Loader `0.17.3` 或更新兼容版本（已验证 `0.17.3`、`0.18.4`、`0.19.3`）
 - Fabric API `0.141.6+1.21.11` 或更新兼容版本
-- `HomingMissiles-HUD-Fabric-1.21.11-3.1.3.jar`
+- `HomingMissiles-HUD-Fabric-1.21.11-3.1.4.jar`
 
-把 Fabric API 和本 Mod JAR 放入客户端 `.minecraft/mods/`。进入安装了 HomingMissiles 3.1.3 插件的服务器后，Mod 会通过 `homingmissiles:control` 主动握手；服务端检测成功后不会再发送 HUD 资源包，并在聊天中确认“逐帧精确居中模式”。
+把 Fabric API 和本 Mod JAR 放入客户端 `.minecraft/mods/`。进入安装了 HomingMissiles 3.1.4 插件的服务器后，Mod 会通过 `homingmissiles:control` 主动握手；服务端检测成功后不会再发送 HUD 资源包，并在聊天中确认“逐帧精确居中模式”。
 
-`0.17.3` 是 Fabric API `0.141.6+1.21.11` 及其所有内嵌模块声明的真实 Loader 下限。v3.1.0 曾误将开发时使用的 `0.19.3` 写成运行时下限；v3.1.3 已去除这个不必要的限制。Minecraft `1.21.11` 和 Java 21 仍是必要条件。
+`0.17.3` 是 Fabric API `0.141.6+1.21.11` 及其所有内嵌模块声明的真实 Loader 下限。v3.1.0 曾误将开发时使用的 `0.19.3` 写成运行时下限；v3.1.4 已去除这个不必要的限制。Minecraft `1.21.11` 和 Java 21 仍是必要条件。
 
 服务端无须安装 Fabric，也不要把客户端 Mod JAR 放进 `plugins/`。
 
@@ -35,7 +35,7 @@ cd client-mod
 正式客户端产物：
 
 ```text
-client-mod/build/libs/HomingMissiles-HUD-Fabric-1.21.11-3.1.3.jar
+client-mod/build/libs/HomingMissiles-HUD-Fabric-1.21.11-3.1.4.jar
 ```
 
 不应发给玩家带 `-sources` 后缀的源码 JAR。
