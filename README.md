@@ -1,10 +1,10 @@
-# HomingMissiles 3.1.3
+# HomingMissiles 3.1.4
 
 面向 **Paper / Purpur / Leaf 1.21.x** 的高伤害连续物理制导弓插件。插件逐 tick 修改箭的真实速度向量，不传送箭实体，因此保留惯性、转弯半径、原版碰撞与伤害流程。每名玩家最多同时维持 4 枚在途导弹。
 
 玩家必须拉住制导弓，把视野内的一名有效玩家持续保持在标定框内，看到 `LOCK` 后才能松弦发射；未完成锁定会强制取消射击。导弹只追踪发射前手动标定的 UUID，不会在飞行中自动换人；锁定后进入独立的 192 格保持圈，以动态截击解持续预判目标。HUD 参考 FlightHud 的实际中心计算和飞行仪表语言，同时提供 Fabric 客户端逐帧渲染与纯服务端资源包降级。插件自动检测 Mod；安装时获得与准星严格同心的连续矢量 HUD，未安装时仍有居中像素 HUD/BossBar。完整 HUD 覆盖整个鞘翅飞行，玩家可关闭，但手动锁定进度始终保留。
 
-> 当前发布线：`3.1.3`（双通道精确居中飞行 HUD，`config-version: 7`）
+> 当前发布线：`3.1.4`（双通道精确居中飞行 HUD，`config-version: 7`）
 > 编译 API：Paper API `1.21.11-R0.1-SNAPSHOT`
 > Java：21  
 > 源码仓库：https://github.com/usermbzlj/HomingMissiles  
@@ -31,37 +31,37 @@
 
 生产服推荐把插件和替换脚本上传到服务器；像素 HMD 资源包还需放到玩家能够访问的 HTTP(S) 地址：
 
-- `target/HomingMissiles-3.1.3.jar`
-- `tools/replace-homingmissiles-3.1.3.sh`
+- `target/HomingMissiles-3.1.4.jar`
+- `tools/replace-homingmissiles-3.1.4.sh`
 - `target/hud-packs/HomingMissiles-HUD-1.21.11.zip`（Leaf 1.21.11）
-- `client-mod/build/libs/HomingMissiles-HUD-Fabric-1.21.11-3.1.3.jar`（推荐给玩家）
+- `client-mod/build/libs/HomingMissiles-HUD-Fabric-1.21.11-3.1.4.jar`（推荐给玩家）
 
 在 Windows 源码目录中执行一条命令即可上传完整发布包：
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\upload-homingmissiles-3.1.3.ps1"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\upload-homingmissiles-3.1.4.ps1"
 ```
 
-也可以直接运行 `tools\upload-homingmissiles-3.1.3.cmd`。连接信息来自不会提交到 Git 的 `tools/upload-config.properties`，Minecraft 目录与服务信息来自同样被忽略的 `tools/deploy-config.properties`；仓库只保留两个 `.example.properties` 通用模板。上传器会把发布文件和部署配置打成一次性传输包，在远端隔离解压、复核并逐文件原子落位。它不会停服或执行 root 安装。
+也可以直接运行 `tools\upload-homingmissiles-3.1.4.cmd`。连接信息来自不会提交到 Git 的 `tools/upload-config.properties`，Minecraft 目录与服务信息来自同样被忽略的 `tools/deploy-config.properties`；仓库只保留两个 `.example.properties` 通用模板。上传器会把发布文件和部署配置打成一次性传输包，在远端隔离解压、复核并逐文件原子落位。它不会停服或执行 root 安装。
 
 第一次配置免密 SSH 时只需运行 `tools\setup-server-ssh.cmd`；它会要求一次现有服务器密码，随后自动验证密钥并更新本地上传配置。
 
 上传成功后，上传器会打印 root 应执行的准确命令，例如：
 
 ```bash
-sudo bash /your/upload/directory/replace-homingmissiles-3.1.3.sh
+sudo bash /your/upload/directory/replace-homingmissiles-3.1.4.sh
 ```
 
 脚本默认读取同目录的 JAR 与 `deploy-config.properties`，并按配置中的服务器目录精确匹配唯一的 systemd 服务。命令行 `--jar`、`--config`、`--server-dir` 和 `--service` 可以覆盖配置。脚本会固定校验 JAR 的 SHA-256
-`4a6139236075998f7d1f1ebbb5ca27c9babf141900abdfdf087abc3d9fd6a343`，自动停服、备份旧 JAR、原子替换、重启并验证插件启用；任一步失败都会尝试恢复旧 JAR 和原服务状态。现有 `plugins/HomingMissiles/config.yml` 不会被覆盖。
+`b7de313587f6ff704a86bb78f4a878c232c143c6da11823e109f779b37302233`，自动停服、备份旧 JAR、原子替换、重启并验证插件启用；任一步失败都会尝试恢复旧 JAR 和原服务状态。现有 `plugins/HomingMissiles/config.yml` 不会被覆盖。
 
-如果不使用脚本，必须手工完成：完全停服、移走所有旧版 HomingMissiles JAR、放入 3.1.3 JAR、完整启动。不要使用 Minecraft 的 `/reload` 代替重启，也不要在 `plugins/` 中同时保留多个版本。
+如果不使用脚本，必须手工完成：完全停服、移走所有旧版 HomingMissiles JAR、放入 3.1.4 JAR、完整启动。不要使用 Minecraft 的 `/reload` 代替重启，也不要在 `plugins/` 中同时保留多个版本。
 
 在日志中确认：
 
 ```text
-[HomingMissiles] Enabling HomingMissiles v3.1.3
-[HomingMissiles] HomingMissiles 3.1.3 已启用
+[HomingMissiles] Enabling HomingMissiles v3.1.4
+[HomingMissiles] HomingMissiles 3.1.4 已启用
 ```
 
 进入游戏执行：
@@ -136,13 +136,13 @@ mvn -U clean package
 成功后发布产物位于：
 
 ```text
-target/HomingMissiles-3.1.3.jar
+target/HomingMissiles-3.1.4.jar
 target/hud-packs/HomingMissiles-HUD-1.21.4.zip
 target/hud-packs/HomingMissiles-HUD-1.21.11.zip
 target/hud-packs/HomingMissiles-HUD-preview.png
 ```
 
-`target/original-*.jar`、`build/classes/`、`build/stubs/` 都不是正式服务器插件产物。服务器中只应安装 `target/HomingMissiles-3.1.3.jar`。
+`target/original-*.jar`、`build/classes/`、`build/stubs/` 都不是正式服务器插件产物。服务器中只应安装 `target/HomingMissiles-3.1.4.jar`。
 
 跳过测试仅用于临时排查，不应作为发布流程：
 
@@ -249,7 +249,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\verify-offline.ps1
 7. 目标死亡、离线、跨世界、进入被排除模式后导弹停止制导，但不会自动重选其他玩家。
 8. 箭正常撞墙、命中、自毁，不发生瞬移。
 9. 达到个人/全服上限和冷却时反馈准确。
-10. 拉弓时只有把有效玩家保持在中央视锥内满 16 tick 才出现 `LOCK`；提前松弦会强制取消，完成后松弦只追踪标定对象。
+10. 拉弓时只有把有效玩家保持在中央视锥内满 18 tick 才出现 `LOCK`；提前松弦会强制取消，完成后松弦只追踪标定对象。
 11. 第五枚导弹必定被拒绝，即使射手拥有 `homingmissiles.bypass.limits`；默认命中伤害不低于 12。
 12. 新发放的弓默认带火矢、无限、耐久 III、不可损坏与力量 V；关闭任一 `item.enchantments.*` 后重新发放可验证对应变化。
 13. 接受资源包后，标定框/进度以及航向、速度、高度、俯仰和飞行矢量逐 tick 平滑更新；发射者听到定制合成的发射/锁定反馈，被锁玩家看到方向/威胁层并听到来自 CC0 素材的逐步加急空间警报。
@@ -278,14 +278,14 @@ dev-server/
 
 ```bash
 mvn clean package
-cp target/HomingMissiles-3.1.3.jar /path/to/dev-server/plugins/
+cp target/HomingMissiles-3.1.4.jar /path/to/dev-server/plugins/
 ```
 
 Windows PowerShell：
 
 ```powershell
 mvn clean package
-Copy-Item .\target\HomingMissiles-3.1.3.jar C:\path\to\dev-server\plugins\ -Force
+Copy-Item .\target\HomingMissiles-3.1.4.jar C:\path\to\dev-server\plugins\ -Force
 ```
 
 然后完整启动测试服。开发中不要依赖 `/reload`：
@@ -366,12 +366,12 @@ HomingMissilesPlugin/
 │  ├─ HudPackBuilder.java
 │  ├─ build-hud-audio.ps1
 │  ├─ test-replacement-script.sh
-│  ├─ replace-homingmissiles-3.1.3.sh
+│  ├─ replace-homingmissiles-3.1.4.sh
 │  ├─ deploy-config.example.properties
 │  ├─ upload-config.example.properties
 │  ├─ setup-server-ssh.ps1 / .cmd
-│  ├─ upload-homingmissiles-3.1.3.ps1
-│  └─ upload-homingmissiles-3.1.3.cmd
+│  ├─ upload-homingmissiles-3.1.4.ps1
+│  └─ upload-homingmissiles-3.1.4.cmd
 ├─ client-mod/                 # Fabric 1.21.11 纯客户端逐帧 HUD
 └─ docs/
    ├─ INSTALL.md
@@ -620,8 +620,8 @@ VectorMath.rotateTowards
 ```bash
 bash tools/verify-offline.sh
 mvn -U clean package
-jar tf target/HomingMissiles-3.1.3.jar
-sha256sum target/HomingMissiles-3.1.3.jar
+jar tf target/HomingMissiles-3.1.4.jar
+sha256sum target/HomingMissiles-3.1.4.jar
 sha1sum target/hud-packs/*.zip
 ```
 

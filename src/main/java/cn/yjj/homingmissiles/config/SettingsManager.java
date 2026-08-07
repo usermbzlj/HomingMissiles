@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.ToDoubleFunction;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -23,28 +24,44 @@ public final class SettingsManager {
 
     static {
         Map<String, Tunable> tunables = new LinkedHashMap<>();
-        register(tunables, new Tunable("range", "tracking.range", 80.0, 4.0, 256.0, "首次捕获范围（格）"));
-        register(tunables, new Tunable("retention-range", "tracking.lock-retention-range", 192.0, 8.0, 512.0, "锁定保持范围（格）"));
-        register(tunables, new Tunable("lifetime", "tracking.max-lifetime-ticks", 300.0, 20.0, 1200.0, "寿命（tick）"));
-        register(tunables, new Tunable("delay", "tracking.activation-delay-ticks", 4.0, 0.0, 100.0, "启动延迟（tick）"));
-        register(tunables, new Tunable("turn", "tracking.turn-rate-degrees-per-tick", 8.0, 0.1, 180.0, "每tick最大转角（度）"));
-        register(tunables, new Tunable("acceleration", "tracking.acceleration-per-tick", 0.025, -0.2, 0.5, "巡航段每tick加速度"));
-        register(tunables, new Tunable("min-speed", "tracking.min-speed", 1.2, 0.05, 10.0, "最低速度"));
-        register(tunables, new Tunable("max-speed", "tracking.max-speed", 3.4, 0.05, 20.0, "巡航段最高速度"));
-        register(tunables, new Tunable("terminal-delay", "tracking.terminal-boost.delay-ticks", 45.0, 0.0, 400.0, "后程助推延迟（tick）"));
-        register(tunables, new Tunable("terminal-acceleration", "tracking.terminal-boost.acceleration-per-tick", 0.075, 0.0, 2.0, "后程每tick加速度"));
-        register(tunables, new Tunable("terminal-max-speed", "tracking.terminal-boost.max-speed", 5.6, 0.05, 30.0, "后程最高速度"));
-        register(tunables, new Tunable("lead", "tracking.lead-ticks", 4.0, 0.0, 40.0, "目标预判tick"));
-        register(tunables, new Tunable("max-lead", "tracking.max-lead-ticks", 24.0, 0.0, 100.0, "最大截击预判tick"));
-        register(tunables, new Tunable("switch-advantage", "tracking.switch-advantage-blocks", 3.0, 0.0, 64.0, "切换目标所需距离优势"));
-        register(tunables, new Tunable("lock-time", "targeting.manual-lock.duration-ticks", 16.0, 1.0, 100.0, "手动锁定时长（tick）"));
-        register(tunables, new Tunable("lock-cone", "targeting.manual-lock.cone-degrees", 10.0, 1.0, 45.0, "手动锁定视锥半角（度）"));
+        register(tunables, new Tunable("range", "tracking.range", 96.0, 4.0, 256.0,
+                "首次捕获范围（格）", PluginSettings::trackingRange));
+        register(tunables, new Tunable("retention-range", "tracking.lock-retention-range", 224.0, 8.0, 512.0,
+                "锁定保持范围（格）", PluginSettings::lockRetentionRange));
+        register(tunables, new Tunable("lifetime", "tracking.max-lifetime-ticks", 260.0, 20.0, 1200.0,
+                "寿命（tick）", PluginSettings::maxLifetimeTicks));
+        register(tunables, new Tunable("delay", "tracking.activation-delay-ticks", 4.0, 0.0, 100.0,
+                "启动延迟（tick）", PluginSettings::activationDelayTicks));
+        register(tunables, new Tunable("turn", "tracking.turn-rate-degrees-per-tick", 7.0, 0.1, 180.0,
+                "每tick最大转角（度）", PluginSettings::turnRateDegreesPerTick));
+        register(tunables, new Tunable("acceleration", "tracking.acceleration-per-tick", 0.015, -0.2, 0.5,
+                "巡航段每tick加速度", PluginSettings::accelerationPerTick));
+        register(tunables, new Tunable("min-speed", "tracking.min-speed", 1.0, 0.05, 10.0,
+                "最低速度", PluginSettings::minSpeed));
+        register(tunables, new Tunable("max-speed", "tracking.max-speed", 3.2, 0.05, 20.0,
+                "巡航段最高速度", PluginSettings::maxSpeed));
+        register(tunables, new Tunable("terminal-delay", "tracking.terminal-boost.delay-ticks", 36.0, 0.0, 400.0,
+                "后程助推延迟（tick）", PluginSettings::terminalBoostDelayTicks));
+        register(tunables, new Tunable("terminal-acceleration", "tracking.terminal-boost.acceleration-per-tick",
+                0.06, 0.0, 2.0, "后程每tick加速度", PluginSettings::terminalAccelerationPerTick));
+        register(tunables, new Tunable("terminal-max-speed", "tracking.terminal-boost.max-speed",
+                4.8, 0.05, 30.0, "后程最高速度", PluginSettings::terminalMaxSpeed));
+        register(tunables, new Tunable("lead", "tracking.lead-ticks", 4.0, 0.0, 40.0,
+                "目标预判tick", PluginSettings::leadTicks));
+        register(tunables, new Tunable("max-lead", "tracking.max-lead-ticks", 24.0, 0.0, 100.0,
+                "最大截击预判tick", PluginSettings::maxLeadTicks));
+        register(tunables, new Tunable("switch-advantage", "tracking.switch-advantage-blocks", 3.0, 0.0, 64.0,
+                "切换目标所需距离优势", PluginSettings::switchAdvantageBlocks));
+        register(tunables, new Tunable("lock-time", "targeting.manual-lock.duration-ticks", 18.0, 1.0, 100.0,
+                "手动锁定时长（tick）", PluginSettings::manualLockDurationTicks));
+        register(tunables, new Tunable("lock-cone", "targeting.manual-lock.cone-degrees", 9.0, 1.0, 45.0,
+                "手动锁定视锥半角（度）", PluginSettings::manualLockConeDegrees));
         TUNABLES = Collections.unmodifiableMap(tunables);
 
         Map<String, Preset> presets = new LinkedHashMap<>();
-        presets.put("balanced", new Preset("balanced", "均衡", Map.of(
-                "turn", 8.0, "acceleration", 0.025, "min-speed", 1.2, "max-speed", 3.4,
-                "terminal-acceleration", 0.075, "terminal-max-speed", 5.6, "lead", 4.0, "max-lead", 24.0)));
+        presets.put("balanced", new Preset("balanced", "均衡空战", Map.of(
+                "turn", 7.0, "acceleration", 0.015, "min-speed", 1.0, "max-speed", 3.2,
+                "terminal-acceleration", 0.06, "terminal-max-speed", 4.8, "lead", 4.0, "max-lead", 24.0)));
         presets.put("agile", new Preset("agile", "高机动", Map.of(
                 "turn", 14.0, "acceleration", 0.04, "min-speed", 1.3, "max-speed", 3.8,
                 "terminal-acceleration", 0.1, "terminal-max-speed", 6.2, "lead", 5.0, "max-lead", 28.0)));
@@ -76,27 +93,27 @@ public final class SettingsManager {
                     + "；缺失的新字段将使用安全默认值。保留原文件，不会覆盖你的配置。");
         }
 
-        double range = boundedDouble(c, "tracking.range", 80.0, 1.0, 512.0, warnings);
-        double retentionRange = boundedDouble(c, "tracking.lock-retention-range", 192.0, 1.0, 1024.0, warnings);
+        double range = boundedDouble(c, "tracking.range", 96.0, 1.0, 512.0, warnings);
+        double retentionRange = boundedDouble(c, "tracking.lock-retention-range", 224.0, 1.0, 1024.0, warnings);
         if (retentionRange < range) {
             warnings.add("tracking.lock-retention-range 小于首次捕获范围，已在内存中提升为 " + range);
             retentionRange = range;
         }
-        int lifetime = boundedInt(c, "tracking.max-lifetime-ticks", 300, 1, 72000, warnings);
+        int lifetime = boundedInt(c, "tracking.max-lifetime-ticks", 260, 1, 72000, warnings);
         int delay = boundedInt(c, "tracking.activation-delay-ticks", 4, 0, 1200, warnings);
-        double turn = boundedDouble(c, "tracking.turn-rate-degrees-per-tick", 8.0, 0.1, 180.0, warnings);
-        double acceleration = boundedDouble(c, "tracking.acceleration-per-tick", 0.025, -1.0, 2.0, warnings);
-        double minSpeed = boundedDouble(c, "tracking.min-speed", 1.2, 0.01, 20.0, warnings);
-        double maxSpeed = boundedDouble(c, "tracking.max-speed", 3.4, 0.01, 50.0, warnings);
+        double turn = boundedDouble(c, "tracking.turn-rate-degrees-per-tick", 7.0, 0.1, 180.0, warnings);
+        double acceleration = boundedDouble(c, "tracking.acceleration-per-tick", 0.015, -1.0, 2.0, warnings);
+        double minSpeed = boundedDouble(c, "tracking.min-speed", 1.0, 0.01, 20.0, warnings);
+        double maxSpeed = boundedDouble(c, "tracking.max-speed", 3.2, 0.01, 50.0, warnings);
         if (maxSpeed < minSpeed) {
             warnings.add("tracking.max-speed 小于 min-speed，已在内存中提升为 " + minSpeed);
             maxSpeed = minSpeed;
         }
-        int terminalDelay = boundedInt(c, "tracking.terminal-boost.delay-ticks", 45, 0, 1200, warnings);
+        int terminalDelay = boundedInt(c, "tracking.terminal-boost.delay-ticks", 36, 0, 1200, warnings);
         int terminalEscapeTrigger = boundedInt(c, "tracking.terminal-boost.escape-trigger-ticks", 6, 1, 100, warnings);
         double terminalAcceleration = boundedDouble(
-                c, "tracking.terminal-boost.acceleration-per-tick", 0.075, 0.0, 3.0, warnings);
-        double terminalMaxSpeed = boundedDouble(c, "tracking.terminal-boost.max-speed", 5.6, 0.01, 60.0, warnings);
+                c, "tracking.terminal-boost.acceleration-per-tick", 0.06, 0.0, 3.0, warnings);
+        double terminalMaxSpeed = boundedDouble(c, "tracking.terminal-boost.max-speed", 4.8, 0.01, 60.0, warnings);
         if (terminalMaxSpeed < maxSpeed) {
             warnings.add("tracking.terminal-boost.max-speed 小于巡航最高速度，已在内存中提升为 " + maxSpeed);
             terminalMaxSpeed = maxSpeed;
@@ -109,13 +126,13 @@ public final class SettingsManager {
         }
 
         int manualLockDuration = boundedInt(
-                c, "targeting.manual-lock.duration-ticks", 16, 1, 100, warnings);
+                c, "targeting.manual-lock.duration-ticks", 18, 1, 100, warnings);
         int manualLockGrace = boundedInt(
-                c, "targeting.manual-lock.break-grace-ticks", 4, 0, 20, warnings);
+                c, "targeting.manual-lock.break-grace-ticks", 5, 0, 20, warnings);
         double manualLockCone = boundedDouble(
-                c, "targeting.manual-lock.cone-degrees", 10.0, 1.0, 45.0, warnings);
+                c, "targeting.manual-lock.cone-degrees", 9.0, 1.0, 45.0, warnings);
         double manualLockBreakCone = boundedDouble(
-                c, "targeting.manual-lock.break-cone-degrees", 16.0, 1.0, 60.0, warnings);
+                c, "targeting.manual-lock.break-cone-degrees", 14.0, 1.0, 60.0, warnings);
         if (manualLockBreakCone < manualLockCone) {
             warnings.add("targeting.manual-lock.break-cone-degrees 小于锁定视锥，已在内存中提升为 "
                     + manualLockCone);
@@ -138,7 +155,7 @@ public final class SettingsManager {
         int bowPowerLevel = boundedInt(c, "item.enchantments.power-level", 5, 0, 5, warnings);
         int clientModDetectionTicks = boundedInt(c, "hud.client-mod.detection-grace-ticks", 40, 10, 200, warnings);
         String clientModDownloadUrl = c.getString("hud.client-mod.download-url",
-                "https://github.com/usermbzlj/HomingMissiles/releases/tag/v3.1.3").trim();
+                "https://github.com/usermbzlj/HomingMissiles/releases/tag/v3.1.4").trim();
         if (!clientModDownloadUrl.isEmpty()
                 && (!isHttpUrl(clientModDownloadUrl) || !isAscii(clientModDownloadUrl))) {
             warnings.add("hud.client-mod.download-url 必须是只含 ASCII 的 http/https URL，已忽略");
@@ -368,24 +385,10 @@ public final class SettingsManager {
     }
 
     public double currentTunableValue(Tunable tunable) {
-        PluginSettings s = current;
-        return switch (tunable.key()) {
-            case "range" -> s.trackingRange();
-            case "retention-range" -> s.lockRetentionRange();
-            case "lifetime" -> s.maxLifetimeTicks();
-            case "delay" -> s.activationDelayTicks();
-            case "turn" -> s.turnRateDegreesPerTick();
-            case "acceleration" -> s.accelerationPerTick();
-            case "min-speed" -> s.minSpeed();
-            case "max-speed" -> s.maxSpeed();
-            case "terminal-delay" -> s.terminalBoostDelayTicks();
-            case "terminal-acceleration" -> s.terminalAccelerationPerTick();
-            case "terminal-max-speed" -> s.terminalMaxSpeed();
-            case "lead" -> s.leadTicks();
-            case "max-lead" -> s.maxLeadTicks();
-            case "switch-advantage" -> s.switchAdvantageBlocks();
-            default -> throw new IllegalArgumentException("未映射的参数：" + tunable.key());
-        };
+        if (tunable == null) {
+            throw new IllegalArgumentException("参数不能为空");
+        }
+        return tunable.currentValue().applyAsDouble(current);
     }
 
     private static void register(Map<String, Tunable> map, Tunable tunable) {
@@ -506,7 +509,8 @@ public final class SettingsManager {
     }
 
     public record Tunable(String key, String path, double defaultValue,
-                          double min, double max, String displayName) {
+                          double min, double max, String displayName,
+                          ToDoubleFunction<PluginSettings> currentValue) {
     }
 
     public record Preset(String key, String displayName, Map<String, Double> values) {

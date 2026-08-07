@@ -28,6 +28,23 @@ public final class SettingsUtilityTest {
                 != PluginSettings.FeedbackMode.CHAT) {
             throw new AssertionError("legacy true feedback must use the configured fallback");
         }
+        SettingsManager manager = new SettingsManager(new HomingMissilesPlugin());
+        manager.reload();
+        if (manager.tunables().size() != 16) {
+            throw new AssertionError("expected sixteen tunable parameters");
+        }
+        for (SettingsManager.Tunable tunable : manager.tunables().values()) {
+            double value = manager.currentTunableValue(tunable);
+            if (!Double.isFinite(value)) {
+                throw new AssertionError("tunable value must be finite: " + tunable.key());
+            }
+        }
+        if (manager.currentTunableValue(manager.tunables().get("lock-time")) != 18.0) {
+            throw new AssertionError("lock-time must map to manual lock duration");
+        }
+        if (manager.currentTunableValue(manager.tunables().get("lock-cone")) != 9.0) {
+            throw new AssertionError("lock-cone must map to manual lock cone");
+        }
         System.out.println("SettingsUtilityTest: PASS");
     }
 }

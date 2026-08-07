@@ -122,6 +122,7 @@
 - `acceleration`
 - `min-speed`
 - `max-speed`
+- `terminal-delay`
 - `terminal-acceleration`
 - `terminal-max-speed`
 - `lead`

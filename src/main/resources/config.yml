@@ -1,4 +1,4 @@
-# HomingMissiles 3.1.3
+# HomingMissiles 3.1.4
 # Paper/Purpur 1.21.x，Java 21。
 # 速度单位为“方块/tick”；正常服务器每秒20 tick。
 # 修改后可执行 /hbow reload。在线调参可使用 /hbow tune。
@@ -7,33 +7,33 @@ config-version: 7
 
 tracking:
   # 拉弓标定只在近圈发生，避免误锁非常远的玩家。
-  range: 80.0
+  range: 96.0
 
   # 一旦建立锁定，当前目标可在更大的保持圈内继续被追踪。
-  # 该值必须不小于 range；默认是首次捕获距离的 2.4 倍。
-  lock-retention-range: 192.0
+  # 该值必须不小于 range；均衡空战配置约为首次捕获距离的 2.33 倍。
+  lock-retention-range: 224.0
 
-  # 最大飞行寿命。300 tick = 15秒，为远距拦截和二次追赶留出时间。
-  max-lifetime-ticks: 300
+  # 最大飞行寿命。260 tick = 13秒，足够二次追赶且不会长期占用在途通道。
+  max-lifetime-ticks: 260
 
   # 发射后延迟多久开始索敌，避免刚离弦便急转。
   activation-delay-ticks: 4
 
   # 每tick允许改变的最大飞行角度。
-  turn-rate-degrees-per-tick: 8.0
+  turn-rate-degrees-per-tick: 7.0
 
   # 巡航段每tick增加的速度。可设为轻微负值，但不能低于 min-speed。
-  acceleration-per-tick: 0.025
+  acceleration-per-tick: 0.015
 
-  min-speed: 1.2
-  max-speed: 3.4
+  min-speed: 1.0
+  max-speed: 3.2
 
   # 后程发动机一旦点火就不会关闭。达到锁定时长，或者目标连续拉远时都会触发。
   terminal-boost:
-    delay-ticks: 45
+    delay-ticks: 36
     escape-trigger-ticks: 6
-    acceleration-per-tick: 0.075
-    max-speed: 5.6
+    acceleration-per-tick: 0.06
+    max-speed: 4.8
 
   # 按目标当前速度预判若干tick后的位置。0表示不预判。
   lead-ticks: 4.0
@@ -62,12 +62,12 @@ tracking:
 targeting:
   manual-lock:
     # 必须拉住弓，把一名有效玩家持续保持在中央锁定视锥内，完成后松弦才会发射。
-    duration-ticks: 16
-    # 新目标进入此半角范围才开始标定。10度约为中央准星周围的小视野。
-    cone-degrees: 10.0
+    duration-ticks: 18
+    # 新目标进入此半角范围才开始标定。9度要求主动瞄准，但仍容许飞行抖动。
+    cone-degrees: 9.0
     # 已锁目标可在更大的视锥内短暂保持，避免轻微手抖立即断锁。
-    break-cone-degrees: 16.0
-    break-grace-ticks: 4
+    break-cone-degrees: 14.0
+    break-grace-ticks: 5
 
 limits:
   # 全服务器同时在途的制导箭上限。
@@ -123,7 +123,7 @@ hud:
   client-mod:
     # 客户端 Mod 在登录后主动握手；检测到时插件不再发送 HUD 资源包。
     # 留空仍会推荐安装，但不附下载链接。
-    download-url: 'https://github.com/usermbzlj/HomingMissiles/releases/tag/v3.1.3'
+    download-url: 'https://github.com/usermbzlj/HomingMissiles/releases/tag/v3.1.4'
     detection-grace-ticks: 40
   shooter-bossbar: true
   target-bossbar: true
