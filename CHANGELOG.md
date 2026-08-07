@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.1.1 — 2026-08-07
+
+- 修正客户端 Mod 过度严格的 Fabric Loader 依赖声明：从错误的 `>=0.19.3` 降为 Fabric API 实际要求的 `>=0.17.3`。
+- 确认 HomingMissiles HUD 不直接依赖 Loader 实现 API，并对 `0.17.3`、`0.18.4`、`0.19.3` 建立兼容构建矩阵。
+- 现有 Loader `0.18.4` 用户无需升级到最新版即可加载 Mod；Minecraft `1.21.11`、Java 21 与 Fabric API `0.141.6+1.21.11` 要求不变。
+
 ## 3.1.0 — 2026-08-07
 
 ### Dual-path centered flight HUD

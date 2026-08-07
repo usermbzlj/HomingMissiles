@@ -12,10 +12,10 @@
 正式构建完成后，在源码根目录运行：
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\upload-homingmissiles-3.1.0.ps1"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ".\tools\upload-homingmissiles-3.1.1.ps1"
 ```
 
-也可以直接运行 `tools\upload-homingmissiles-3.1.0.cmd`。上传器读取两个不会提交到 Git 的本地配置。首次使用时复制模板：
+也可以直接运行 `tools\upload-homingmissiles-3.1.1.cmd`。上传器读取两个不会提交到 Git 的本地配置。首次使用时复制模板：
 
 ```powershell
 Copy-Item .\tools\upload-config.example.properties .\tools\upload-config.properties
@@ -38,14 +38,14 @@ Copy-Item .\tools\deploy-config.example.properties .\tools\deploy-config.propert
 
 ```powershell
 # 只检查并显示操作，不连接服务器
-.\tools\upload-homingmissiles-3.1.0.ps1 -DryRun
+.\tools\upload-homingmissiles-3.1.1.ps1 -DryRun
 
 # 临时覆盖配置中的主机或端口
-.\tools\upload-homingmissiles-3.1.0.ps1 `
+.\tools\upload-homingmissiles-3.1.1.ps1 `
   -RemoteHostName staging.example.com -Port 2222
 
 # 不上传 HUD 包
-.\tools\upload-homingmissiles-3.1.0.ps1 -SkipHudPack
+.\tools\upload-homingmissiles-3.1.1.ps1 -SkipHudPack
 ```
 
 不要把密码写进脚本、配置或命令行。若需要完全无人值守，应把本机公钥加入目标服务器用户的 `~/.ssh/authorized_keys`，并先人工核对服务器主机指纹。
@@ -54,8 +54,8 @@ Copy-Item .\tools\deploy-config.example.properties .\tools\deploy-config.propert
 
 上传完成后，以下文件位于上传配置指定的 `remote_directory`：
 
-- `HomingMissiles-3.1.0.jar`
-- `replace-homingmissiles-3.1.0.sh`
+- `HomingMissiles-3.1.1.jar`
+- `replace-homingmissiles-3.1.1.sh`
 - `deploy-config.properties`
 
 像素 HUD ZIP 不放入 `plugins/`。上传器会把 Leaf 1.21.11 HUD 包保存在同一个 `remote_directory`，之后仍需把它托管在玩家可访问的 HTTP(S) 地址；完整步骤见 [HUD_RESOURCE_PACK.md](HUD_RESOURCE_PACK.md)。资源包没有配置好时插件仍能运行，但会降级显示 BossBar。
@@ -63,15 +63,15 @@ Copy-Item .\tools\deploy-config.example.properties .\tools\deploy-config.propert
 然后由 root 执行上传器打印的准确命令，例如：
 
 ```bash
-sudo bash /your/upload/directory/replace-homingmissiles-3.1.0.sh
+sudo bash /your/upload/directory/replace-homingmissiles-3.1.1.sh
 ```
 
 脚本会读取 `deploy-config.properties` 的 `server_dir`，并查找 `WorkingDirectory` 与该目录完全相同的唯一 systemd 服务；不会仅凭名称猜测，更不会误停整个管理面板。也可以显式覆盖：
 
 ```bash
-bash replace-homingmissiles-3.1.0.sh \
+bash replace-homingmissiles-3.1.1.sh \
   --config /root/deploy-config.properties \
-  --jar /root/upload/HomingMissiles-3.1.0.jar \
+  --jar /root/upload/HomingMissiles-3.1.1.jar \
   --server-dir /opt/minecraft \
   --service minecraft.service
 ```
@@ -82,38 +82,38 @@ bash replace-homingmissiles-3.1.0.sh \
 2. 停服并确认服务器目录中没有残留 Java 进程；
 3. 把所有检测到的旧 HomingMissiles JAR 移入 `plugins/.homingmissiles-backups/<UTC时间>-<PID>/`；
 4. 快照但不覆盖现有 `plugins/HomingMissiles/config.yml`；
-5. 在 `plugins/` 同一文件系统内原子安装 3.1.0；
-6. 恢复服务，并在 `latest.log` 或 systemd journal 中验证 3.1.0 启用标记；
+5. 在 `plugins/` 同一文件系统内原子安装 3.1.1；
+6. 恢复服务，并在 `latest.log` 或 systemd journal 中验证 3.1.1 启用标记；
 7. 任一步失败时移走新 JAR、恢复旧 JAR，并在服务原先运行时重新启动旧服务。
 
 发布 JAR 的固定校验值：
 
 ```text
-SHA-256  4b62bd567cd62f995a79d73568252dc6c8ea0c702767a79bbd6b39bd722d6a65
+SHA-256  8f308fb7fcf8e72cf45df5a5a645d41f6ce98a7647a4e356fc5d5979fe5684cf
 ```
 
 服务器由面板而不是独立 systemd 单元管理时，脚本会在发现运行中的 Java 进程后安全退出。先通过面板完整停服，再使用：
 
 ```bash
-sudo bash /your/upload/directory/replace-homingmissiles-3.1.0.sh \
+sudo bash /your/upload/directory/replace-homingmissiles-3.1.1.sh \
   --install-only
 ```
 
-`--install-only` 不会启动服务器；完成后需手动启动并检查日志。所有参数见 `bash replace-homingmissiles-3.1.0.sh --help`。
+`--install-only` 不会启动服务器；完成后需手动启动并检查日志。所有参数见 `bash replace-homingmissiles-3.1.1.sh --help`。
 
 ## 安装成品 JAR
 
 1. 完整停止目标 Minecraft 服务。
 2. 确认自己操作的是正确服务的 `plugins/` 目录。
 3. 删除旧版同名 JAR，不要同时保留多个版本。
-4. 放入 `HomingMissiles-3.1.0.jar`。
+4. 放入 `HomingMissiles-3.1.1.jar`。
 5. 确认服务器用户至少拥有读取权限。
 6. 完整启动服务。
 
 Linux 示例：
 
 ```bash
-install -m 0644 HomingMissiles-3.1.0.jar /path/to/server/plugins/HomingMissiles-3.1.0.jar
+install -m 0644 HomingMissiles-3.1.1.jar /path/to/server/plugins/HomingMissiles-3.1.1.jar
 ```
 
 ## 从源码构建后安装
@@ -122,14 +122,14 @@ install -m 0644 HomingMissiles-3.1.0.jar /path/to/server/plugins/HomingMissiles-
 
 ```bash
 mvn -U clean package
-install -m 0644 target/HomingMissiles-3.1.0.jar /path/to/server/plugins/
+install -m 0644 target/HomingMissiles-3.1.1.jar /path/to/server/plugins/
 ```
 
 Windows PowerShell：
 
 ```powershell
 mvn -U clean package
-Copy-Item .\target\HomingMissiles-3.1.0.jar C:\path\to\server\plugins\ -Force
+Copy-Item .\target\HomingMissiles-3.1.1.jar C:\path\to\server\plugins\ -Force
 ```
 
 ## 启动验证
@@ -137,9 +137,9 @@ Copy-Item .\target\HomingMissiles-3.1.0.jar C:\path\to\server\plugins\ -Force
 日志应出现：
 
 ```text
-[HomingMissiles] Loading server plugin HomingMissiles v3.1.0
-[HomingMissiles] Enabling HomingMissiles v3.1.0
-[HomingMissiles] HomingMissiles 3.1.0 已启用
+[HomingMissiles] Loading server plugin HomingMissiles v3.1.1
+[HomingMissiles] Enabling HomingMissiles v3.1.1
+[HomingMissiles] HomingMissiles 3.1.1 已启用
 ```
 
 进游戏执行：
@@ -167,7 +167,7 @@ Copy-Item .\target\HomingMissiles-3.1.0.jar C:\path\to\server\plugins\ -Force
 
 从配置版本 5 升至 6 时新增 `targeting.manual-lock.duration-ticks`、`cone-degrees`、`break-cone-degrees` 与 `break-grace-ticks`。6 版发射行为改为强制手动标定，`tracking.dynamic-retargeting` 和 `switch-advantage-blocks` 仅保留兼容读取。旧文件缺字段时会采用 16 tick、10°/16° 与 4 tick 容错的内存默认值，但仍建议显式迁移后再上线。
 
-从配置版本 6 升至 7 时新增 `hud.client-mod.download-url` 与 `detection-grace-ticks`。旧配置缺少这两项时，插件会自动采用 v3.1.0 GitHub Release 页面与 40 tick 检测窗口。玩家个人 HUD 开关存于 PDC，不需要迁移 YAML。
+从配置版本 6 升至 7 时新增 `hud.client-mod.download-url` 与 `detection-grace-ticks`。旧配置缺少这两项时，插件会自动采用 v3.1.1 GitHub Release 页面与 40 tick 检测窗口。玩家个人 HUD 开关存于 PDC，不需要迁移 YAML。
 
 ## 常见问题
 
