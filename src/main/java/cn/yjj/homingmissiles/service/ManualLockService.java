@@ -3,6 +3,7 @@ package cn.yjj.homingmissiles.service;
 import cn.yjj.homingmissiles.config.PluginSettings;
 import cn.yjj.homingmissiles.config.SettingsManager;
 import cn.yjj.homingmissiles.item.HomingBowFactory;
+import cn.yjj.homingmissiles.util.HudFormat;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -202,10 +203,10 @@ public final class ManualLockService {
             return null;
         }
 
-        double absoluteYaw = Math.toDegrees(Math.atan2(-offset.getX(), offset.getZ()));
         double horizontal = Math.hypot(offset.getX(), offset.getZ());
         double absolutePitch = -Math.toDegrees(Math.atan2(offset.getY(), horizontal));
-        double screenX = clamp(-wrapDegrees(absoluteYaw - eye.getYaw()) / coneDegrees, -1.0, 1.0);
+        double screenX = HudFormat.targetScreenX(
+                eye.getYaw(), offset.getX(), offset.getZ(), coneDegrees);
         double screenY = clamp((absolutePitch - eye.getPitch()) / coneDegrees, -1.0, 1.0);
         return new AimCandidate(candidate, angle, distance, screenX, screenY);
     }
@@ -240,10 +241,6 @@ public final class ManualLockService {
         PluginSettings settings = settingsManager.current();
         return serviceTick - state.lastVisibleTick <= settings.manualLockGraceTicks()
                 && isEligibleTarget(state.shooter, state.target, settings);
-    }
-
-    private static double wrapDegrees(double value) {
-        return ((value + 180.0) % 360.0 + 360.0) % 360.0 - 180.0;
     }
 
     private static double lerp(double current, double target, double factor) {

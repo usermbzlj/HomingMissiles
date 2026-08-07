@@ -1,4 +1,4 @@
-# HomingMissiles 3.1.2
+# HomingMissiles 3.1.3
 # Paper/Purpur 1.21.x，Java 21。
 # 速度单位为“方块/tick”；正常服务器每秒20 tick。
 # 修改后可执行 /hbow reload。在线调参可使用 /hbow tune。
@@ -123,7 +123,7 @@ hud:
   client-mod:
     # 客户端 Mod 在登录后主动握手；检测到时插件不再发送 HUD 资源包。
     # 留空仍会推荐安装，但不附下载链接。
-    download-url: 'https://github.com/usermbzlj/HomingMissiles/releases/tag/v3.1.2'
+    download-url: 'https://github.com/usermbzlj/HomingMissiles/releases/tag/v3.1.3'
     detection-grace-ticks: 40
   shooter-bossbar: true
   target-bossbar: true
