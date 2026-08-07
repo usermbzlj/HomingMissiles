@@ -236,4 +236,4 @@ if ($LASTEXITCODE -ne 0) {
 Update-UploadConfig $ConfigFile $KeyFile
 Write-Host "[ssh-setup] SSH setup completed"
 Write-Host "[ssh-setup] upload-config.properties now uses this key with batch_mode=true"
-Write-Host "[ssh-setup] Future upload command: .\tools\upload-homingmissiles-3.1.1.cmd"
+Write-Host "[ssh-setup] Future upload command: .\tools\upload-homingmissiles-3.1.2.cmd"

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.2 — 2026-08-07
+
+- 在纯服务端 Title HUD 的 Adventure 组件上显式应用 `ShadowColor.none()`，关闭原版 Title 文字阴影，消除整套位图字形以固定偏移重复绘制造成的重影。
+- 客户端 Fabric HUD 渲染路径和手动锁定逻辑保持不变。
+
 ## 3.1.1 — 2026-08-07
 
 - 修正客户端 Mod 过度严格的 Fabric Loader 依赖声明：从错误的 `>=0.19.3` 降为 Fabric API 实际要求的 `>=0.17.3`。

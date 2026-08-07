@@ -5,6 +5,7 @@ import cn.yjj.homingmissiles.config.SettingsManager;
 import cn.yjj.homingmissiles.util.HudFormat;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.ShadowColor;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -664,7 +665,11 @@ public final class LockHudService implements PluginMessageListener {
 
     private void showOverlay(Player player, String glyphs) {
         player.showTitle(Title.title(
-                Component.text(glyphs).font(HUD_TITLE_FONT), Component.empty(), HUD_TITLE_TIMES));
+                Component.text(glyphs)
+                        .font(HUD_TITLE_FONT)
+                        .shadowColor(ShadowColor.none()),
+                Component.empty(),
+                HUD_TITLE_TIMES));
         overlayPlayers.put(player.getUniqueId(), player);
     }
 
