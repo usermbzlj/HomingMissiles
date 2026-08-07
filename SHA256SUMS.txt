@@ -1,4 +1,4 @@
-8f308fb7fcf8e72cf45df5a5a645d41f6ce98a7647a4e356fc5d5979fe5684cf  HomingMissiles-3.1.1.jar
-a59539a07d80dc16413301e47cb29741e626cc98352c7207bb0cce81cdbc426e  HomingMissiles-HUD-Fabric-1.21.11-3.1.1.jar
+f94ab1f3dc19f689f331dca4bafdcb71e8b618bde71eeaa37ae81fc8317c950f  HomingMissiles-3.1.2.jar
+6c18731cd18255f6e582ab7395de6351235a83b4b5eccf823dc8547f71a7b04c  HomingMissiles-HUD-Fabric-1.21.11-3.1.2.jar
 fefc97d8df857908c0948c3655ea7607207edcf894c847a0e73b65bd74d6fef6  HomingMissiles-HUD-1.21.11.zip
 00014230c85b9f8995efdb2e51acafd55c0dd1abdf085e1daed328d96cd90988  HomingMissiles-HUD-1.21.4.zip

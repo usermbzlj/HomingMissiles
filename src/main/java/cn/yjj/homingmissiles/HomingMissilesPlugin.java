@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.util.logging.Level;
 
 public final class HomingMissilesPlugin extends JavaPlugin {
-    public static final String VERSION = "3.1.1";
+    public static final String VERSION = "3.1.2";
 
     private SettingsManager settingsManager;
     private MessageService messages;
